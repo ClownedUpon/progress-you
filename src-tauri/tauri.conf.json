@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Progress You",
+  "version": "0.1.0",
+  "identifier": "com.progressyou.desktop",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Progress You",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true,
+        "decorations": true,
+		"devtools": true
+      }
+    ]
+  },
+  "bundle": {
+    "icon": ["icons/icon.ico"]
+  }
+}
