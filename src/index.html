@@ -47,6 +47,10 @@ const TEXT_COLORS = [
   "#0C7B7B","#135D99","#4B3FC7","#9B1A55",
 ];
 
+// Bump this number whenever the data schema changes (new fields, renamed keys, etc.)
+// so exported files can be versioned and future imports can handle old formats.
+const EXPORT_VERSION = 5;
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const uid = () => Math.random().toString(36).slice(2,10);
@@ -63,7 +67,7 @@ function mondayOf(date) {
 }
 function shiftWeek(wk,n) {
   const [y,m,d]=wk.split("-").map(Number);
-  const dt=new Date(y,m-1,d+12); dt.setDate(dt.getDate()+n*7);
+  const dt=new Date(y,m-1,d,12,0,0); dt.setDate(dt.getDate()+n*7);
   return mondayOf(dt);
 }
 function weekLabel(wk) {
@@ -125,8 +129,7 @@ async function sget(k) {
 
 async function sset(k, v) {
   try {
-    const { writeTextFile, mkdir, BaseDirectory } = window.__TAURI__.fs;
-    await mkdir(".", { baseDir: BaseDirectory.AppData, recursive: true });
+    const { writeTextFile, BaseDirectory } = window.__TAURI__.fs;
     await writeTextFile(k + ".json", JSON.stringify(v), { baseDir: BaseDirectory.AppData });
   } catch(e) { console.error("sset error:", e); }
 }
@@ -154,9 +157,11 @@ function App() {
   const [showSett,  setShowSett]  = useState(false);
   const [showIO,    setShowIO]    = useState(false);
   const [showCap,   setShowCap]   = useState(false);
+  const [dialog,    setDialog]    = useState(null);
 
   useEffect(()=>{
     (async()=>{
+      try { const { mkdir, BaseDirectory } = window.__TAURI__.fs; await mkdir(".", { baseDir: BaseDirectory.AppData, recursive: true }); } catch(e) {}
       const sec=await sget("py-sections");
       const t  =await sget("py-tt");
       const k  =await sget("py-tasks");
@@ -199,8 +204,14 @@ function App() {
   }
   function copyPrevWeek(){
     const prev=shiftWeek(week,-1);
-    if(!tt[prev]) return alert("No timetable found for last week.");
-    setTt(p=>({...p,[week]:JSON.parse(JSON.stringify(tt[prev]))}));
+    if(!tt[prev]) { setDialog({message:"No timetable data found for last week.",onClose:()=>setDialog(null)}); return; }
+    setDialog({
+      message:"Copy last week's timetable?",
+      detail:"This will replace any blocks already added for this week.",
+      confirmLabel:"Copy",
+      onConfirm:()=>{ setTt(p=>({...p,[week]:JSON.parse(JSON.stringify(tt[prev]))})); setDialog(null); },
+      onClose:()=>setDialog(null)
+    });
   }
 
   // ── Task ops
@@ -228,12 +239,13 @@ function App() {
 
   // ── Notes ops
   const getSectionNotes=sid=>{ const val=notes[sid]; return Array.isArray(val)?val:[]; };
-  function addNote(sid,parentId=null){
+  function addNote(sid,parentId=null,opts={}){
     setNotes(prev=>{
       const items=prev[sid]||[];
       const siblings=items.filter(n=>n.parentId===(parentId||null));
       const order=siblings.length?Math.max(...siblings.map(n=>n.order))+1:0;
-      const newNote=makeNote(parentId,order);
+      const base=makeNote(parentId,order);
+      const newNote={...base,...(opts.title?{title:opts.title}:{}),...(opts.content?{content:opts.content}:{})};
       return{...prev,[sid]:[...items,newNote]};
     });
   }
@@ -253,7 +265,7 @@ function App() {
     const payload={};
     if(mode==="content"||mode==="all"){payload.tasks=tasks;payload.tt=tt;payload.notes=notes;}
     if(mode==="settings"||mode==="all"){payload.sections=sections;}
-    payload._export={mode,exportedAt:new Date().toISOString(),version:5};
+    payload._export={mode,exportedAt:new Date().toISOString(),version:EXPORT_VERSION};
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
     const a=document.createElement("a");
     a.href=URL.createObjectURL(blob);
@@ -267,17 +279,24 @@ function App() {
         const data=JSON.parse(e.target.result);
         const mode=data._export?.mode||"all";
         const lines=[];
-        if(data.tasks)    lines.push(`• ${data.tasks.length} tasks`);
-        if(data.tt)       lines.push(`• Timetable data`);
-        if(data.notes){const total=Object.values(data.notes).reduce((s,a)=>s+(Array.isArray(a)?a.length:1),0);lines.push(`• ${total} notes`);}
-        if(data.sections) lines.push(`• ${data.sections.length} sections`);
-        if(!window.confirm(`Import "${mode}" export?\n\nThis will REPLACE:\n${lines.join("\n")}\n\nThis cannot be undone.`)) return;
-        if(data.tasks)    setTasks(data.tasks);
-        if(data.tt)       setTt(data.tt);
-        if(data.notes)    setNotes(data.notes);
-        if(data.sections) setSections(data.sections);
-        alert("Import successful.");
-      }catch{ alert("Could not read file."); }
+        if(data.tasks)    lines.push(`${data.tasks.length} tasks`);
+        if(data.tt)       lines.push("timetable data");
+        if(data.notes){const total=Object.values(data.notes).reduce((s,a)=>s+(Array.isArray(a)?a.length:1),0);lines.push(`${total} notes`);}
+        if(data.sections) lines.push(`${data.sections.length} sections`);
+        setDialog({
+          message:`Import "${mode}" backup?`,
+          detail:`This will replace: ${lines.join(", ")}. This cannot be undone.`,
+          confirmLabel:"Import",
+          onConfirm:()=>{
+            if(data.tasks)    setTasks(data.tasks);
+            if(data.tt)       setTt(data.tt);
+            if(data.notes)    setNotes(data.notes);
+            if(data.sections) setSections(data.sections);
+            setDialog({message:"Import successful!",onClose:()=>setDialog(null)});
+          },
+          onClose:()=>setDialog(null)
+        });
+      }catch{ setDialog({message:"Could not read file.",detail:"Make sure it's a valid Progress You export (.json).",onClose:()=>setDialog(null)}); }
     };
     reader.readAsText(file);
   }
@@ -381,6 +400,7 @@ function App() {
       {showSett && <SectionsEditor sections={sections} setSections={setSections} onClose={()=>setShowSett(false)}/>}
       {showIO   && <ImportExportModal onExport={exportData} onImport={importData} onClose={()=>setShowIO(false)}/>}
       {showCap  && <QuickCaptureModal sections={sections} byId={byId} addTask={addTask} addNote={addNote} onClose={()=>setShowCap(false)}/>}
+      <AppDialog dialog={dialog} onClose={dialog?.onClose}/>
     </div>
   );
 }
@@ -407,42 +427,21 @@ function QuickCaptureModal({sections,byId,addTask,addNote,onClose}) {
     };
     window.addEventListener("keydown",handler);
     return ()=>window.removeEventListener("keydown",handler);
-  });
+  },[title,body,type,secId,hasDue,dueDate]);
 
   function handleSave() {
     if(!title.trim()) { titleRef.current?.focus(); return; }
     if(type==="task") {
       addTask(secId,title.trim(),body.trim(),{dueDate:hasDue?dueDate:null});
     } else {
-      addNote(secId,null);
-      // Note is created; we can't easily set title+content here without the note id,
-      // so we capture title as a note named after the title with body as initial content
-      // Instead we add note then update via a workaround: use a temp mechanism
-      // Simplest: just add the note — user renames in Notes view.
-      // Better: addNote returns nothing, so we wire a separate path.
-      // We'll use the direct setNotes approach by calling addNote and relying on
-      // the fact that notes auto-title as "Untitled Note" — acceptable for a capture.
-      // For now the title is captured in the task notes field as a memo.
-      // Actually let's just add it as a task in "backlog" with type "note-capture" flag
-      // No — keep it clean. Notes capture creates a real note.
-      // We need to give addNote a title override. Let's just accept the UX as-is:
-      // the note will be "Untitled Note" and the user sets title in Notes view.
-      // The body text goes into the note content as a paragraph.
+      addNote(secId, null, {
+        title: title.trim(),
+        content: body.trim() ? `<p>${body.trim()}</p>` : "<p><br></p>"
+      });
     }
     setSaved(true);
     setTimeout(()=>{ onClose(); },500);
   }
-
-  // A cleaner approach: for notes, we call a modified path
-  // that creates note with title pre-set. We'll do this inline.
-  // Since addNote doesn't accept title, we need to intercept.
-  // We'll handle this via the save logic using the notes setter directly —
-  // but App passes addNote, not setNotes. So let's extend addNote to accept options.
-  // For now the note title = capture title, body = initial content.
-  // This requires passing a richer addNote. Instead let's just save as a Task
-  // with a "capture" status (inbox) that the Boards view can show.
-  // Decision: Notes capture → goes to Boards as a backlog task with body as notes.
-  // The "Note" type in capture just pre-fills differently. Clean and simple.
 
   const sec = byId[secId]||sections[0]||{color:"#7C7166"};
 
@@ -1050,14 +1049,17 @@ function NotesView({sections,byId,getSectionNotes,addNote,updateNoteField,delete
 // ─── Note Editor ──────────────────────────────────────────────────────────────
 
 function NoteEditor({note,sectionColor,onTitleChange,onContentChange}) {
-  const editorRef =useRef(null);
-  const saveTimer =useRef(null);
+  const editorRef  =useRef(null);
+  const saveTimer  =useRef(null);
+  const titleTimer =useRef(null);
   const [saved,   setSaved]   =useState(true);
+  const [titleVal,setTitleVal]=useState(note.title||"");
   const [selColor,setSelColor]=useState("#1C1714");
   const [showClr, setShowClr] =useState(false);
   const [fmtState,setFmtState]=useState({bold:false,italic:false,underline:false});
   useEffect(()=>{ if(editorRef.current) editorRef.current.innerHTML=note.content||"<p><br></p>"; },[]);
   const schedSave=()=>{ setSaved(false); clearTimeout(saveTimer.current); saveTimer.current=setTimeout(()=>{ if(editorRef.current) onContentChange(editorRef.current.innerHTML); setSaved(true); },500); };
+  const schedTitleSave=v=>{ setSaved(false); clearTimeout(titleTimer.current); titleTimer.current=setTimeout(()=>{ onTitleChange(v); setSaved(true); },400); };
   const refreshFmt=()=>setFmtState({bold:document.queryCommandState("bold"),italic:document.queryCommandState("italic"),underline:document.queryCommandState("underline")});
   const cmd=(command,value=null)=>{ editorRef.current?.focus(); document.execCommand(command,false,value); refreshFmt(); schedSave(); };
   function wrapSelection(styleProp,styleVal){
@@ -1084,7 +1086,7 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange}) {
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
       <div style={{padding:"16px 24px 0",borderBottom:"1px solid #EBE4D8",flexShrink:0}}>
-        <input defaultValue={note.title} onBlur={e=>onTitleChange(e.target.value)} onKeyDown={e=>e.key==="Enter"&&e.currentTarget.blur()} placeholder="Note title…"
+        <input value={titleVal} onChange={e=>{setTitleVal(e.target.value);schedTitleSave(e.target.value);}} onKeyDown={e=>e.key==="Enter"&&e.currentTarget.blur()} placeholder="Note title…"
           style={{...S.input,marginBottom:0,border:"none",background:"transparent",fontSize:17,fontWeight:700,fontFamily:'"Playfair Display",serif',padding:"0 0 14px",borderRadius:0}}/>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:3,padding:"7px 12px",background:"#F3EDE3",borderBottom:"1px solid #E3D9CC",flexWrap:"wrap",flexShrink:0}}>
@@ -1198,7 +1200,10 @@ function StatsView({tasks,tt,week,sections,byId}) {
   const completedTW=tasks.filter(t=>t.type!=="spacer"&&t.completedAt&&new Date(t.completedAt)>=weekStart&&new Date(t.completedAt)<weekEnd);
   const backlogAll =tasks.filter(t=>t.type!=="spacer"&&t.status==="backlog").length;
   const boardSecs  =sections.filter(s=>s.id!=="overhead");
-  const compRate   =completedTW.length+allActive.length>0?Math.round(completedTW.length/(completedTW.length+allActive.length)*100):null;
+  // Completion rate: tasks completed this week vs tasks created this week still active.
+  // Filters out stale "this-week" tasks from older weeks that were never resolved.
+  const activeCreatedThisWeek=allActive.filter(t=>t.createdAt&&new Date(t.createdAt)>=weekStart&&new Date(t.createdAt)<weekEnd);
+  const compRate=completedTW.length+activeCreatedThisWeek.length>0?Math.round(completedTW.length/(completedTW.length+activeCreatedThisWeek.length)*100):null;
   return (
     <div>
       <h2 style={{fontFamily:'"Playfair Display",serif',fontSize:24,fontWeight:700,marginBottom:4}}>Weekly Stats</h2>
@@ -1325,6 +1330,25 @@ function SectionsEditor({sections,setSections,onClose}) {
 		<AutostartToggle/>
 		</div>
     </Overlay>
+  );
+}
+
+// ─── App Dialog (replaces window.alert / window.confirm) ─────────────────────
+
+function AppDialog({dialog,onClose}) {
+  if(!dialog) return null;
+  const isConfirm=!!dialog.onConfirm;
+  return (
+    <div onClick={isConfirm?null:onClose} style={{position:"fixed",inset:0,background:"rgba(28,23,20,0.72)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400,padding:20}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#FDFAF6",borderRadius:14,padding:"26px 28px",width:400,maxWidth:"100%",boxShadow:"0 28px 72px rgba(0,0,0,0.42)",border:"1px solid #E3D9CC"}}>
+        <div style={{fontFamily:'"Playfair Display",serif',fontSize:17,fontWeight:700,marginBottom:dialog.detail?8:18,color:"#1C1714"}}>{dialog.message}</div>
+        {dialog.detail&&<p style={{fontSize:13,color:"#6B5E4E",lineHeight:1.55,marginBottom:20}}>{dialog.detail}</p>}
+        <div style={{display:"flex",gap:8}}>
+          {isConfirm&&<button onClick={dialog.onConfirm} style={{...S.btnDark,flex:1}}>{dialog.confirmLabel||"Confirm"}</button>}
+          <button onClick={onClose} style={{...S.btnGhost,flex:isConfirm?0:1}}>{isConfirm?"Cancel":"OK"}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
