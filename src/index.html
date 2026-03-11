@@ -308,15 +308,20 @@ function App() {
   }
 
   // ── Update check
-  async function checkForUpdate() {
+  async function checkForUpdate(onResult) {
     try {
       const skipped = await sget("py-skipped-version");
       const result  = await window.__TAURI__.core.invoke('check_update');
       if (result && result.version !== skipped) {
         setUpdateInfo(result);
         setShowUpdate(true);
+        onResult?.({ status: "available", version: result.version });
+      } else {
+        onResult?.({ status: result ? "skipped" : "latest" });
       }
-    } catch(e) { /* silently ignore — no network, dev mode, etc. */ }
+    } catch(e) {
+      onResult?.({ status: "error", message: e?.message || e?.toString() || "Unknown error" });
+    }
   }
 
   if(!ready) return <div style={{minHeight:"100vh",background:"#F8F3EC",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:'"DM Sans",sans-serif',color:"#9B8E80"}}>Loading…</div>;
@@ -415,7 +420,7 @@ function App() {
         {view==="stats"     && <StatsView     tasks={tasks} tt={tt} week={week} sections={sections} byId={byId}/>}
       </main>
 
-      {showSett && <SettingsModal sections={sections} setSections={setSections} onClose={()=>setShowSett(false)}/>}
+      {showSett && <SettingsModal sections={sections} setSections={setSections} onClose={()=>setShowSett(false)} checkForUpdate={checkForUpdate}/>}
       {showIO   && <ImportExportModal onExport={exportData} onImport={importData} onClose={()=>setShowIO(false)}/>}
       {showCap  && <QuickCaptureModal sections={sections} byId={byId} addTask={addTask} addNote={addNote} onClose={()=>setShowCap(false)}/>}
       <AppDialog dialog={dialog} onClose={dialog?.onClose}/>
@@ -1305,12 +1310,13 @@ function StatsView({tasks,tt,week,sections,byId}) {
 
 // ─── Settings Modal ───────────────────────────────────────────────────────────
 
-function SettingsModal({sections,setSections,onClose}) {
-  const [tab,      setTab]      = useState("sections");
-  const [local,    setLocal]    = useState(sections.map(s=>({...s})));
-  const [newLabel, setNewLabel] = useState("");
-  const [newColor, setNewColor] = useState("#2A7A8A");
-  const [appVer,   setAppVer]   = useState(null);
+function SettingsModal({sections,setSections,onClose,checkForUpdate}) {
+  const [tab,        setTab]      = useState("sections");
+  const [local,      setLocal]    = useState(sections.map(s=>({...s})));
+  const [newLabel,   setNewLabel] = useState("");
+  const [newColor,   setNewColor] = useState("#2A7A8A");
+  const [appVer,     setAppVer]   = useState(null);
+  const [checkState, setCheckState] = useState(null); // null | "checking" | {status,version?,message?}
 
   useEffect(()=>{
     try {
@@ -1383,7 +1389,38 @@ function SettingsModal({sections,setSections,onClose}) {
       {tab==="app"&&(
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <AutostartToggle/>
-          <div style={{marginTop:8,textAlign:"center",color:"#C2B49E",fontSize:11}}>
+
+          {/* Update checker */}
+          <div style={{background:"#F3EDE3",borderRadius:9,border:"1px solid #E3D9CC",padding:"12px 14px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+              <div style={{fontSize:12,fontWeight:600,color:"#1C1714"}}>Software Update</div>
+              <button
+                onClick={async()=>{
+                  setCheckState("checking");
+                  await checkForUpdate(r=>setCheckState(r));
+                }}
+                disabled={checkState==="checking" || !checkForUpdate}
+                style={{...S.btnDark,fontSize:11,padding:"5px 14px",flexShrink:0}}
+              >{checkState==="checking" ? "Checking…" : "Check for Updates"}</button>
+            </div>
+            {checkState && checkState !== "checking" && (
+              <div style={{marginTop:10,fontSize:11,lineHeight:1.5,padding:"8px 10px",borderRadius:7,
+                background: checkState.status==="error"   ? "#FAE0E0"
+                          : checkState.status==="available"? "#D4F0E0"
+                          : "#EBE4D8",
+                color:      checkState.status==="error"   ? "#C43A3A"
+                          : checkState.status==="available"? "#1A7A43"
+                          : "#6B5E4E"
+              }}>
+                {checkState.status==="latest"    && "✓  You're on the latest version."}
+                {checkState.status==="skipped"   && "Update available but marked as skipped. Clear the skipped version to see it again."}
+                {checkState.status==="available" && `⬆  v${checkState.version} is available — check for the update dialog.`}
+                {checkState.status==="error"     && `Error: ${checkState.message}`}
+              </div>
+            )}
+          </div>
+
+          <div style={{textAlign:"center",color:"#C2B49E",fontSize:11}}>
             {appVer ? `Progress You  ·  v${appVer}` : "Progress You  ·  Dev build"}
           </div>
         </div>
