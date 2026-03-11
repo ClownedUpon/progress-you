@@ -164,6 +164,7 @@ function App() {
   const [showUpdate,setShowUpdate]= useState(false);
 
   useEffect(()=>{
+    document.addEventListener('contextmenu', e => e.preventDefault());
     (async()=>{
       try { if(window.__TAURI__?.fs){ const { mkdir, BaseDirectory } = window.__TAURI__.fs; await mkdir(".", { baseDir: BaseDirectory.AppData, recursive: true }); } } catch(e) {}
       const sec=await sget("py-sections");
