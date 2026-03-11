@@ -118,7 +118,6 @@ function makeNote(parentId=null,order=0) {
 // ─── Storage ──────────────────────────────────────────────────────────────────
 
 async function sget(k) {
-  if (!window.__TAURI__?.fs) return null;
   try {
     const { exists, readTextFile, BaseDirectory } = window.__TAURI__.fs;
     const found = await exists(k + ".json", { baseDir: BaseDirectory.AppData });
@@ -129,7 +128,6 @@ async function sget(k) {
 }
 
 async function sset(k, v) {
-  if (!window.__TAURI__?.fs) return;
   try {
     const { writeTextFile, BaseDirectory } = window.__TAURI__.fs;
     await writeTextFile(k + ".json", JSON.stringify(v), { baseDir: BaseDirectory.AppData });
@@ -165,7 +163,7 @@ function App() {
 
   useEffect(()=>{
     (async()=>{
-      try { if(window.__TAURI__?.fs){ const { mkdir, BaseDirectory } = window.__TAURI__.fs; await mkdir(".", { baseDir: BaseDirectory.AppData, recursive: true }); } } catch(e) {}
+      try { const { mkdir, BaseDirectory } = window.__TAURI__.fs; await mkdir(".", { baseDir: BaseDirectory.AppData, recursive: true }); } catch(e) {}
       const sec=await sget("py-sections");
       const t  =await sget("py-tt");
       const k  =await sget("py-tasks");
@@ -414,7 +412,7 @@ function App() {
         {view==="stats"     && <StatsView     tasks={tasks} tt={tt} week={week} sections={sections} byId={byId}/>}
       </main>
 
-      {showSett && <SettingsModal sections={sections} setSections={setSections} onClose={()=>setShowSett(false)}/>}
+      {showSett && <SectionsEditor sections={sections} setSections={setSections} onClose={()=>setShowSett(false)}/>}
       {showIO   && <ImportExportModal onExport={exportData} onImport={importData} onClose={()=>setShowIO(false)}/>}
       {showCap  && <QuickCaptureModal sections={sections} byId={byId} addTask={addTask} addNote={addNote} onClose={()=>setShowCap(false)}/>}
       <AppDialog dialog={dialog} onClose={dialog?.onClose}/>
@@ -1302,91 +1300,57 @@ function StatsView({tasks,tt,week,sections,byId}) {
   );
 }
 
-// ─── Settings Modal ───────────────────────────────────────────────────────────
+// ─── Sections Editor ──────────────────────────────────────────────────────────
 
-function SettingsModal({sections,setSections,onClose}) {
-  const [tab,      setTab]      = useState("sections");
-  const [local,    setLocal]    = useState(sections.map(s=>({...s})));
-  const [newLabel, setNewLabel] = useState("");
-  const [newColor, setNewColor] = useState("#2A7A8A");
-  const [appVer,   setAppVer]   = useState(null);
-
-  useEffect(()=>{
-    try {
-      window.__TAURI__.app.getVersion()
-        .then(v=>setAppVer(v))
-        .catch(()=>setAppVer(null));
-    } catch { setAppVer(null); }
-  },[]);
-
+function SectionsEditor({sections,setSections,onClose}) {
+  const [local,   setLocal]   =useState(sections.map(s=>({...s})));
+  const [newLabel,setNewLabel]=useState("");
+  const [newColor,setNewColor]=useState("#2A7A8A");
   function save()       { setSections(local); onClose(); }
   function remove(id)   { setLocal(l=>l.filter(s=>s.id!==id)); }
   function upd(id,u)    { setLocal(l=>l.map(s=>s.id===id?{...s,...u}:s)); }
   function addSection() { if(!newLabel.trim()) return; setLocal(l=>[...l,{id:uid(),label:newLabel.trim(),color:newColor}]); setNewLabel(""); setNewColor("#2A7A8A"); }
-
-  const TABS=[["sections","Sections"],["app","App"]];
-
   return (
-    <Overlay onClose={onClose} width={560}>
-      {/* Header */}
-      <div style={{marginBottom:20}}>
-        <div style={{fontFamily:'"Playfair Display",serif',fontSize:20,fontWeight:700}}>Settings</div>
-      </div>
-
-      {/* Tab bar */}
-      <div style={{display:"flex",gap:2,background:"#EBE4D8",borderRadius:9,padding:3,marginBottom:22,width:"fit-content"}}>
-        {TABS.map(([key,label])=>(
-          <button key={key} onClick={()=>setTab(key)} style={{padding:"5px 18px",borderRadius:7,border:"none",fontSize:12,fontWeight:600,background:tab===key?"#FDFAF6":"transparent",color:tab===key?"#1C1714":"#7A6C5E",boxShadow:tab===key?"0 1px 4px rgba(0,0,0,0.1)":"none",transition:"all 0.15s"}}>{label}</button>
+    <Overlay onClose={onClose} width={540}>
+      <div style={{fontFamily:'"Playfair Display",serif',fontSize:20,fontWeight:700,marginBottom:4}}>Manage Sections</div>
+      <p style={{fontSize:12,color:"#9B8E80",marginBottom:22,lineHeight:1.5}}>Add, rename, or recolour sections. Removing a section won't delete its tasks or notes.</p>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+        {local.map(s=>(
+          <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,background:"#F3EDE3",borderRadius:10,padding:"10px 12px"}}>
+            <div style={{position:"relative",flexShrink:0}}>
+              <div style={{width:26,height:26,borderRadius:6,background:s.color,border:"2px solid rgba(0,0,0,0.12)",cursor:"pointer"}} onClick={()=>document.getElementById("cp-"+s.id)?.click()}/>
+              <input id={"cp-"+s.id} type="color" value={s.color} onChange={e=>upd(s.id,{color:e.target.value})} style={{position:"absolute",opacity:0,width:1,height:1,top:0,left:0,pointerEvents:"none"}}/>
+            </div>
+            <div style={{display:"flex",gap:3,flexWrap:"wrap",maxWidth:112}}>
+              {PRESET_COLORS.map(c=><div key={c} onClick={()=>upd(s.id,{color:c})} style={{width:14,height:14,borderRadius:3,background:c,cursor:"pointer",border:s.color===c?"2px solid #1C1714":"2px solid transparent"}}/>)}
+            </div>
+            <input value={s.label} onChange={e=>upd(s.id,{label:e.target.value})} style={{...S.input,marginBottom:0,flex:1,padding:"6px 10px"}}/>
+            <button onClick={()=>remove(s.id)} style={{...S.btnMicro,background:"#FAE0E0",color:"#C43A3A",flexShrink:0}}>✕</button>
+          </div>
         ))}
       </div>
-
-      {/* ── Sections tab */}
-      {tab==="sections"&&(<>
-        <p style={{fontSize:12,color:"#9B8E80",marginBottom:18,lineHeight:1.5}}>Add, rename, or recolour sections. Removing a section won't delete its tasks or notes.</p>
-        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:22}}>
-          {local.map(s=>(
-            <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,background:"#F3EDE3",borderRadius:10,padding:"10px 12px"}}>
-              <div style={{position:"relative",flexShrink:0}}>
-                <div style={{width:26,height:26,borderRadius:6,background:s.color,border:"2px solid rgba(0,0,0,0.12)",cursor:"pointer"}} onClick={()=>document.getElementById("cp-"+s.id)?.click()}/>
-                <input id={"cp-"+s.id} type="color" value={s.color} onChange={e=>upd(s.id,{color:e.target.value})} style={{position:"absolute",opacity:0,width:1,height:1,top:0,left:0,pointerEvents:"none"}}/>
-              </div>
-              <div style={{display:"flex",gap:3,flexWrap:"wrap",maxWidth:112}}>
-                {PRESET_COLORS.map(c=><div key={c} onClick={()=>upd(s.id,{color:c})} style={{width:14,height:14,borderRadius:3,background:c,cursor:"pointer",border:s.color===c?"2px solid #1C1714":"2px solid transparent"}}/>)}
-              </div>
-              <input value={s.label} onChange={e=>upd(s.id,{label:e.target.value})} style={{...S.input,marginBottom:0,flex:1,padding:"6px 10px"}}/>
-              <button onClick={()=>remove(s.id)} style={{...S.btnMicro,background:"#FAE0E0",color:"#C43A3A",flexShrink:0}}>✕</button>
-            </div>
-          ))}
-        </div>
-        <div style={{background:"#EBE4D8",borderRadius:12,padding:"16px",marginBottom:22}}>
-          <Cap>Add New Section</Cap>
-          <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8}}>
-            <div style={{position:"relative",flexShrink:0}}>
-              <div style={{width:34,height:34,borderRadius:8,background:newColor,border:"2px solid rgba(0,0,0,0.1)",cursor:"pointer"}} onClick={()=>document.getElementById("cp-new")?.click()}/>
-              <input id="cp-new" type="color" value={newColor} onChange={e=>setNewColor(e.target.value)} style={{position:"absolute",opacity:0,width:1,height:1,top:0,left:0,pointerEvents:"none"}}/>
-            </div>
-            <input value={newLabel} onChange={e=>setNewLabel(e.target.value)} placeholder="Section name…" style={{...S.input,marginBottom:0,flex:1}} onKeyDown={e=>e.key==="Enter"&&addSection()}/>
-            <button onClick={addSection} style={{...S.btnDark,flexShrink:0}}>Add</button>
+      <div style={{background:"#EBE4D8",borderRadius:12,padding:"16px",marginBottom:22}}>
+        <Cap>Add New Section</Cap>
+        <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8}}>
+          <div style={{position:"relative",flexShrink:0}}>
+            <div style={{width:34,height:34,borderRadius:8,background:newColor,border:"2px solid rgba(0,0,0,0.1)",cursor:"pointer"}} onClick={()=>document.getElementById("cp-new")?.click()}/>
+            <input id="cp-new" type="color" value={newColor} onChange={e=>setNewColor(e.target.value)} style={{position:"absolute",opacity:0,width:1,height:1,top:0,left:0,pointerEvents:"none"}}/>
           </div>
-          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-            {PRESET_COLORS.map(c=><div key={c} onClick={()=>setNewColor(c)} style={{width:18,height:18,borderRadius:4,background:c,cursor:"pointer",border:newColor===c?"2px solid #1C1714":"2px solid transparent"}}/>)}
-          </div>
+          <input value={newLabel} onChange={e=>setNewLabel(e.target.value)} placeholder="Section name…" style={{...S.input,marginBottom:0,flex:1}} onKeyDown={e=>e.key==="Enter"&&addSection()}/>
+          <button onClick={addSection} style={{...S.btnDark,flexShrink:0}}>Add</button>
         </div>
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={save} style={S.btnDark}>Save Changes</button>
-          <button onClick={onClose} style={S.btnGhost}>Cancel</button>
+        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+          {PRESET_COLORS.map(c=><div key={c} onClick={()=>setNewColor(c)} style={{width:18,height:18,borderRadius:4,background:c,cursor:"pointer",border:newColor===c?"2px solid #1C1714":"2px solid transparent"}}/>)}
         </div>
-      </>)}
-
-      {/* ── App tab */}
-      {tab==="app"&&(
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <AutostartToggle/>
-          <div style={{marginTop:8,textAlign:"center",color:"#C2B49E",fontSize:11}}>
-            {appVer ? `Progress You  ·  v${appVer}` : "Progress You  ·  Dev build"}
-          </div>
-        </div>
-      )}
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={save} style={S.btnDark}>Save Changes</button>
+        <button onClick={onClose} style={S.btnGhost}>Cancel</button>
+      </div>
+	  <div style={{marginTop:24,paddingTop:20,borderTop:"1px solid #E3D9CC"}}>
+		<Cap>App Settings</Cap>
+		<AutostartToggle/>
+		</div>
     </Overlay>
   );
 }
@@ -1394,7 +1358,6 @@ function SettingsModal({sections,setSections,onClose}) {
 // ─── Update Dialog ────────────────────────────────────────────────────────────
 
 function UpdateDialog({info,onSkip,onRemind}) {
-
   const [phase,setPhase]=useState("idle"); // idle | downloading | done | error
   const [errMsg,setErrMsg]=useState("");
 
@@ -1500,15 +1463,12 @@ function AutostartToggle() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    try {
-      window.__TAURI__.autostart.isEnabled()
-        .then(v => { setEnabled(v); setLoading(false); })
-        .catch(() => setLoading(false));
-    } catch { setLoading(false); }
+    window.__TAURI__.autostart.isEnabled()
+      .then(v => { setEnabled(v); setLoading(false); })
+      .catch(() => setLoading(false));
   }, []);
 
   async function toggle() {
-    if (!window.__TAURI__?.autostart) return;
     if (enabled) {
       await window.__TAURI__.autostart.disable();
     } else {
@@ -1519,14 +1479,11 @@ function AutostartToggle() {
 
   if (loading) return null;
   
-  // Dev server has a port (e.g. http://localhost:1420).
-  // Production is served from http://tauri.localhost with no port.
-  const isDev = !!window.location.port;
-  if (isDev) return (
-    <div style={{padding:"10px 12px",background:"#F3EDE3",borderRadius:9,border:"1px solid #E3D9CC",fontSize:12,color:"#9B8E80"}}>
-      Launch on startup — not available in dev mode
-    </div>
-  );
+  const isDev = window.location.href.startsWith("http://");
+if (isDev) return (
+  <div style={{padding:"10px 12px",background:"#F3EDE3",borderRadius:9,border:"1px solid #E3D9CC",fontSize:12,color:"#9B8E80"}}>
+    Launch on startup — not available in dev mode
+  </div>)
 
   return (
     <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px",background:"#F3EDE3",borderRadius:9,border:"1px solid #E3D9CC"}}>
