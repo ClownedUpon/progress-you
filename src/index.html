@@ -382,7 +382,7 @@ function App() {
         </div>
 
         <nav style={{display:"flex",gap:3,background:"#2C2522",borderRadius:10,padding:3}}>
-          {[["today","Today"],["timetable","Timetable"],["boards","Boards"],["notes","Notes"],["monthly","Log"],["stats","Stats"]].map(([v,l])=>(
+          {[["today","Today"],["timetable","Timetable"],["taskboards","Taskboards"],["notes","Notes"],["monthly","Log"],["stats","Stats"]].map(([v,l])=>(
             <button key={v} className="nav-p" onClick={()=>setView(v)}
               style={{background:view===v?"#F8F3EC":"transparent",color:view===v?"#1C1714":"#7A6C5E"}}>{l}</button>
           ))}
@@ -414,7 +414,7 @@ function App() {
       <main style={{padding:"24px 28px",maxWidth:1500,margin:"0 auto"}}>
         {view==="today"     && <TodayView     {...tp} getDayBlocks={getDayBlocks} onOpenCapture={()=>setShowCap(true)}/>}
         {view==="timetable" && <TimetableView sections={sections} byId={byId} getDayBlocks={getDayBlocks} upsertBlock={upsertBlock} deleteBlock={deleteBlock}/>}
-        {view==="boards"    && <BoardsView    {...tp}/>}
+        {view==="taskboards"    && <TaskboardsView    {...tp}/>}
         {view==="notes"     && <NotesView     sections={sections} byId={byId} getSectionNotes={getSectionNotes} addNote={addNote} updateNoteField={updateNoteField} deleteNote={deleteNote}/>}
         {view==="monthly"   && <MonthlyView   tasks={tasks} sections={sections} byId={byId}/>}
         {view==="stats"     && <StatsView     tasks={tasks} tt={tt} week={week} sections={sections} byId={byId}/>}
@@ -840,9 +840,9 @@ function BlockModal({day,block,sections,onSave,onDelete,onClose}) {
   );
 }
 
-// ─── Boards View ──────────────────────────────────────────────────────────────
+// ─── Taskoards View ──────────────────────────────────────────────────────────────
 
-function BoardsView({sections,byId,tasks,addTask,updateTask,deleteTask,completeTask,moveTask}) {
+function TaskboardsView({sections,byId,tasks,addTask,updateTask,deleteTask,completeTask,moveTask}) {
   const boardSecs=sections.filter(s=>s.id!=="overhead");
   const [secId,   setSecId]   =useState(boardSecs[0]?.id||"");
   const [adding,  setAdding]  =useState(false);
@@ -1187,7 +1187,7 @@ function MonthlyView({tasks,sections,byId}) {
         <h2 style={{fontFamily:'"Playfair Display",serif',fontSize:26,fontWeight:700}}>{fmtMonth(sel)}</h2>
         <span style={{fontSize:13,color:"#9B8E80"}}><strong style={{color:"#1C1714",fontSize:20}}>{done.length}</strong> tasks &nbsp;·&nbsp; <strong style={{color:"#1C1714",fontSize:20}}>{Object.keys(bySec).length}</strong> sections</span>
       </div>
-      {done.length===0&&<Empty icon="📅" text="Nothing completed yet this month." sub="Mark tasks as done in Boards to see them here."/>}
+      {done.length===0&&<Empty icon="📅" text="Nothing completed yet this month." sub="Mark tasks as done in Taskboards to see them here."/>}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
         {Object.entries(bySec).map(([sid,ts])=>{
           const sec=byId[sid]||{label:sid,color:"#9B8E80"};
