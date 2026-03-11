@@ -34,3 +34,4 @@ jobs:
           releaseBody: "See the changelog for what's new."
           releaseDraft: true
           includeUpdaterJson: true
+          tauriScript: npm run tauri
