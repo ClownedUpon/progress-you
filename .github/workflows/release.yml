@@ -18,6 +18,15 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        
+      - name: Set version from tag
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          (Get-Content src-tauri\Cargo.toml) `
+            -replace '^version = ".*"', "version = `"$version`"" |
+            Set-Content src-tauri\Cargo.toml
+          Write-Host "Version set to $version"
 
       - name: Install dependencies
         run: npm install

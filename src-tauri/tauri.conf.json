@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Progress You",
-  "version": "1.3.4",
   "identifier": "com.progressyou.desktop",
   "build": {
     "frontendDist": "../src"
