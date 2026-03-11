@@ -158,6 +158,8 @@ function App() {
   const [showIO,    setShowIO]    = useState(false);
   const [showCap,   setShowCap]   = useState(false);
   const [dialog,    setDialog]    = useState(null);
+  const [updateInfo,setUpdateInfo]= useState(null);
+  const [showUpdate,setShowUpdate]= useState(false);
 
   useEffect(()=>{
     (async()=>{
@@ -171,6 +173,7 @@ function App() {
       if(k)   setTasks(k);
       if(n)   setNotes(n);
       setReady(true);
+      checkForUpdate();
     })();
   },[]);
   useEffect(()=>{ if(ready) sset("py-sections",sections); },[sections,ready]);
@@ -301,6 +304,18 @@ function App() {
     reader.readAsText(file);
   }
 
+  // ── Update check
+  async function checkForUpdate() {
+    try {
+      const skipped = await sget("py-skipped-version");
+      const result  = await window.__TAURI__.core.invoke('check_update');
+      if (result && result.version !== skipped) {
+        setUpdateInfo(result);
+        setShowUpdate(true);
+      }
+    } catch(e) { /* silently ignore — no network, dev mode, etc. */ }
+  }
+
   if(!ready) return <div style={{minHeight:"100vh",background:"#F8F3EC",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:'"DM Sans",sans-serif',color:"#9B8E80"}}>Loading…</div>;
 
   const tp={sections,byId,tasks,addTask,updateTask,deleteTask,completeTask,moveTask};
@@ -401,6 +416,13 @@ function App() {
       {showIO   && <ImportExportModal onExport={exportData} onImport={importData} onClose={()=>setShowIO(false)}/>}
       {showCap  && <QuickCaptureModal sections={sections} byId={byId} addTask={addTask} addNote={addNote} onClose={()=>setShowCap(false)}/>}
       <AppDialog dialog={dialog} onClose={dialog?.onClose}/>
+      {showUpdate && updateInfo && (
+        <UpdateDialog
+          info={updateInfo}
+          onSkip={async()=>{ await sset("py-skipped-version", updateInfo.version); setShowUpdate(false); }}
+          onRemind={()=>setShowUpdate(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1330,6 +1352,85 @@ function SectionsEditor({sections,setSections,onClose}) {
 		<AutostartToggle/>
 		</div>
     </Overlay>
+  );
+}
+
+// ─── Update Dialog ────────────────────────────────────────────────────────────
+
+function UpdateDialog({info,onSkip,onRemind}) {
+  const [phase,setPhase]=useState("idle"); // idle | downloading | done | error
+  const [errMsg,setErrMsg]=useState("");
+
+  async function handleUpdate() {
+    setPhase("downloading");
+    try {
+      await window.__TAURI__.core.invoke('install_update');
+      setPhase("done"); // app will restart automatically; this is a fallback
+    } catch(e) {
+      setErrMsg(e?.toString()||"Unknown error");
+      setPhase("error");
+    }
+  }
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(28,23,20,0.72)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400,padding:20}}>
+      <div style={{background:"#FDFAF6",borderRadius:14,width:480,maxWidth:"100%",boxShadow:"0 28px 72px rgba(0,0,0,0.42)",border:"1px solid #E3D9CC",overflow:"hidden"}}>
+
+        {/* Header */}
+        <div style={{background:"#1C1714",padding:"14px 20px",display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:18}}>⬆</span>
+          <span style={{fontFamily:'"Playfair Display",serif',fontSize:16,fontWeight:700,color:"#F8F3EC"}}>Update Available</span>
+          <span style={{marginLeft:"auto",background:"#4B3FC7",color:"#fff",borderRadius:20,padding:"3px 11px",fontSize:12,fontWeight:700}}>v{info.version}</span>
+        </div>
+
+        <div style={{padding:"20px"}}>
+          {/* Changelog */}
+          {info.notes && (
+            <div style={{background:"#F3EDE3",borderRadius:10,padding:"14px 16px",marginBottom:18,maxHeight:220,overflowY:"auto"}}>
+              <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.6px",textTransform:"uppercase",marginBottom:8}}>What's new</div>
+              <pre style={{fontSize:12,color:"#4A3F30",lineHeight:1.6,whiteSpace:"pre-wrap",fontFamily:'"DM Sans",sans-serif',margin:0}}>{info.notes}</pre>
+            </div>
+          )}
+
+          {/* State-based body */}
+          {phase==="idle"&&(
+            <>
+              <p style={{fontSize:13,color:"#6B5E4E",marginBottom:18,lineHeight:1.5}}>A new version of Progress You is ready to install. The app will restart automatically after updating.</p>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button onClick={handleUpdate} style={{...S.btnDark,flex:1}}>⬆ Update Now</button>
+                <button onClick={onRemind}     style={S.btnGhost}>Remind Next Launch</button>
+                <button onClick={onSkip}       style={{...S.btnGhost,borderColor:"#F1A0A0",color:"#C43A3A"}}>Skip This Version</button>
+              </div>
+            </>
+          )}
+          {phase==="downloading"&&(
+            <div style={{textAlign:"center",padding:"16px 0"}}>
+              <div style={{fontSize:22,marginBottom:10}}>⏳</div>
+              <div style={{fontSize:13,fontWeight:600,color:"#4A3F30"}}>Downloading update…</div>
+              <div style={{fontSize:12,color:"#9B8E80",marginTop:5}}>The app will restart automatically when ready.</div>
+            </div>
+          )}
+          {phase==="done"&&(
+            <div style={{textAlign:"center",padding:"16px 0"}}>
+              <div style={{fontSize:22,marginBottom:10}}>✓</div>
+              <div style={{fontSize:13,fontWeight:600,color:"#1A7A43"}}>Update installed — restarting…</div>
+            </div>
+          )}
+          {phase==="error"&&(
+            <>
+              <div style={{background:"#FAE0E0",borderRadius:9,padding:"12px 14px",marginBottom:14}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#C43A3A",marginBottom:4}}>Update failed</div>
+                <div style={{fontSize:11,color:"#6B5E4E"}}>{errMsg}</div>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setPhase("idle")} style={S.btnDark}>Try Again</button>
+                <button onClick={onRemind} style={S.btnGhost}>Later</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
