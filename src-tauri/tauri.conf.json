@@ -16,7 +16,7 @@
         "minHeight": 600,
         "center": true,
         "decorations": true,
-		"devtools": true
+		"dragDropEnabled": false
       }
     ]
   },
