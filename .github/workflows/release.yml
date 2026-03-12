@@ -18,15 +18,25 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        
+
       - name: Set version from tag
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}" -replace '^v', ''
+          $version = "${{ github.ref_name }}" -replace '^v', '' -replace '(\d)([a-zA-Z])', '$1-$2'
           (Get-Content src-tauri\Cargo.toml) `
             -replace '^version = ".*"', "version = `"$version`"" |
             Set-Content src-tauri\Cargo.toml
           Write-Host "Version set to $version"
+
+      - name: Read release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $notes = if (Test-Path RELEASE_NOTES.md) { Get-Content RELEASE_NOTES.md -Raw } else { "" }
+          $delimiter = "EOF_NOTES_" + (New-Guid).ToString("N")
+          echo "body<<$delimiter" >> $env:GITHUB_OUTPUT
+          echo $notes >> $env:GITHUB_OUTPUT
+          echo $delimiter >> $env:GITHUB_OUTPUT
 
       - name: Install dependencies
         run: npm install
@@ -40,7 +50,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Progress You ${{ github.ref_name }}"
-          releaseBody: "See the changelog for what's new."
+          releaseBody: "${{ steps.notes.outputs.body }}"
           releaseDraft: true
           includeUpdaterJson: true
           tauriScript: npm run tauri
