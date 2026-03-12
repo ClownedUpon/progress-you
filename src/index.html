@@ -13,6 +13,7 @@
   <div id="root"></div>
   <script type="text/babel">
     const { useState, useEffect, useRef, useCallback } = React;
+const CtxMenuCtx = React.createContext(null);
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_SECTIONS = [
@@ -162,6 +163,9 @@ function App() {
   const [dialog,    setDialog]    = useState(null);
   const [updateInfo,setUpdateInfo]= useState(null);
   const [showUpdate,setShowUpdate]= useState(false);
+  const [ctxMenu,  setCtxMenu]   = useState(null);
+  const openCtx = (e, items) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({x:e.clientX,y:e.clientY,items}); };
+  const [lastBoardSec, setLastBoardSec] = useState(null);
 
   useEffect(()=>{
     document.addEventListener('contextmenu', e => e.preventDefault());
@@ -329,6 +333,7 @@ function App() {
   const tp={sections,byId,tasks,addTask,updateTask,deleteTask,completeTask,moveTask};
 
   return (
+    <CtxMenuCtx.Provider value={openCtx}>
     <div style={{background:"#F8F3EC",minHeight:"100vh",fontFamily:'"DM Sans",sans-serif',color:"#1C1714"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;1,500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -370,6 +375,8 @@ function App() {
           cursor:pointer;transition:all 0.18s;box-shadow:0 2px 8px rgba(200,168,107,0.35);}
         .cap-btn:hover{opacity:1;transform:translateY(-1px);box-shadow:0 4px 14px rgba(200,168,107,0.45);}
         .upcoming-task:hover{background:#E8E0D4!important;}
+        .ctx-sub-item:hover{background:#F3EDE3;}
+        .ctx-item:hover{background:#F3EDE3;}
       `}</style>
 
       {/* ── Header ── */}
@@ -382,7 +389,7 @@ function App() {
         </div>
 
         <nav style={{display:"flex",gap:3,background:"#2C2522",borderRadius:10,padding:3}}>
-          {[["today","Today"],["timetable","Timetable"],["taskboards","Taskboards"],["notes","Notes"],["monthly","Log"],["stats","Stats"]].map(([v,l])=>(
+          {[["today","Today"],["timetable","Timetable"],["boards","Taskboards"],["notes","Notes"],["monthly","Log"],["stats","Stats"]].map(([v,l])=>(
             <button key={v} className="nav-p" onClick={()=>setView(v)}
               style={{background:view===v?"#F8F3EC":"transparent",color:view===v?"#1C1714":"#7A6C5E"}}>{l}</button>
           ))}
@@ -414,7 +421,7 @@ function App() {
       <main style={{padding:"24px 28px",maxWidth:1500,margin:"0 auto"}}>
         {view==="today"     && <TodayView     {...tp} getDayBlocks={getDayBlocks} onOpenCapture={()=>setShowCap(true)}/>}
         {view==="timetable" && <TimetableView sections={sections} byId={byId} getDayBlocks={getDayBlocks} upsertBlock={upsertBlock} deleteBlock={deleteBlock}/>}
-        {view==="taskboards"    && <TaskboardsView    {...tp}/>}
+        {view==="boards"    && <BoardsView    {...tp} initialSecId={lastBoardSec} onSecChange={setLastBoardSec}/>}
         {view==="notes"     && <NotesView     sections={sections} byId={byId} getSectionNotes={getSectionNotes} addNote={addNote} updateNoteField={updateNoteField} deleteNote={deleteNote}/>}
         {view==="monthly"   && <MonthlyView   tasks={tasks} sections={sections} byId={byId}/>}
         {view==="stats"     && <StatsView     tasks={tasks} tt={tt} week={week} sections={sections} byId={byId}/>}
@@ -431,7 +438,9 @@ function App() {
           onRemind={()=>setShowUpdate(false)}
         />
       )}
+      {ctxMenu&&<ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={ctxMenu.items} onClose={()=>setCtxMenu(null)}/>}
     </div>
+    </CtxMenuCtx.Provider>
   );
 }
 
@@ -750,6 +759,7 @@ function MiniCol({label,labelColor,tasks,secColor,updateTask,completeTask}) {
 // ─── Timetable View ───────────────────────────────────────────────────────────
 
 function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock}) {
+  const openCtx = React.useContext(CtxMenuCtx);
   const [modal,setModal]=useState(null);
   return (
     <div>
@@ -774,14 +784,28 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock}) {
               <div style={{display:"flex",flexDirection:"column",gap:7}}>
                 {blocks.map(blk=>{
                   if(blk.type==="break") return (
-                    <div key={blk.id} className="chip-hov" onClick={()=>setModal({day,block:blk})} style={{background:"#F3EDE3",borderRadius:9,padding:"7px 10px",border:"1.5px dashed #C2B49E",cursor:"pointer",transition:"filter 0.15s"}}>
+                    <div key={blk.id} className="chip-hov" onClick={()=>setModal({day,block:blk})}
+                      onContextMenu={e=>{ if(!openCtx) return; openCtx(e,[
+                        {label:"Edit",      action:()=>setModal({day,block:blk})},
+                        {label:"Copy to day…", submenu:DAYS.filter(d=>d!==day).map(d=>({label:d,action:()=>upsertBlock(d,{...blk,id:uid()})}))},
+                        {divider:true},
+                        {label:"Clear slot",danger:true,action:()=>deleteBlock(day,blk.id)},
+                      ]); }}
+                      style={{background:"#F3EDE3",borderRadius:9,padding:"7px 10px",border:"1.5px dashed #C2B49E",cursor:"pointer",transition:"filter 0.15s"}}>
                       <div style={{fontSize:10,color:"#9B8E80",fontWeight:700}}>{blk.start} – {blk.end}</div>
                       <div style={{fontSize:11,color:"#C2B49E",fontStyle:"italic"}}>{blk.label||"Break / Buffer"}</div>
                     </div>
                   );
                   const sec=byId[blk.sectionId]||{color:"#9B8E80",label:"?"};
                   return (
-                    <div key={blk.id} className="chip-hov" onClick={()=>setModal({day,block:blk})} style={{background:sec.color,color:textFor(sec.color),borderRadius:9,padding:"8px 10px",cursor:"pointer",borderLeft:"3px solid rgba(255,255,255,0.3)",transition:"filter 0.15s"}}>
+                    <div key={blk.id} className="chip-hov" onClick={()=>setModal({day,block:blk})}
+                      onContextMenu={e=>{ if(!openCtx) return; openCtx(e,[
+                        {label:"Edit",      action:()=>setModal({day,block:blk})},
+                        {label:"Copy to day…", submenu:DAYS.filter(d=>d!==day).map(d=>({label:d,action:()=>upsertBlock(d,{...blk,id:uid()})}))},
+                        {divider:true},
+                        {label:"Clear slot",danger:true,action:()=>deleteBlock(day,blk.id)},
+                      ]); }}
+                      style={{background:sec.color,color:textFor(sec.color),borderRadius:9,padding:"8px 10px",cursor:"pointer",borderLeft:"3px solid rgba(255,255,255,0.3)",transition:"filter 0.15s"}}>
                       <div style={{fontSize:10,opacity:0.7,fontWeight:700,marginBottom:3}}>{blk.start} – {blk.end}</div>
                       <div style={{fontSize:12,fontWeight:600,lineHeight:1.3}}>{blk.label||sec.label}</div>
                     </div>
@@ -840,11 +864,11 @@ function BlockModal({day,block,sections,onSave,onDelete,onClose}) {
   );
 }
 
-// ─── Taskoards View ──────────────────────────────────────────────────────────────
+// ─── Taskboards View ──────────────────────────────────────────────────────────────
 
-function TaskboardsView({sections,byId,tasks,addTask,updateTask,deleteTask,completeTask,moveTask}) {
+function BoardsView({sections,byId,tasks,addTask,updateTask,deleteTask,completeTask,moveTask,initialSecId,onSecChange}) {
   const boardSecs=sections.filter(s=>s.id!=="overhead");
-  const [secId,   setSecId]   =useState(boardSecs[0]?.id||"");
+  const [secId,   setSecId]   =useState(()=>{ const id=initialSecId||boardSecs[0]?.id||""; return boardSecs.find(s=>s.id===id)?id:boardSecs[0]?.id||""; });
   const [adding,  setAdding]  =useState(false);
   const [newTitle,setNewTitle]=useState("");
   const [newNotes,setNewNotes]=useState("");
@@ -869,7 +893,7 @@ function TaskboardsView({sections,byId,tasks,addTask,updateTask,deleteTask,compl
     <div>
       <div style={{display:"flex",gap:4,marginBottom:22,flexWrap:"wrap",background:"#EBE4D8",borderRadius:12,padding:4,width:"fit-content",maxWidth:"100%"}}>
         {boardSecs.map(s=>(
-          <button key={s.id} onClick={()=>{setSecId(s.id);setAdding(false);}} style={{padding:"6px 14px",borderRadius:9,border:"none",fontSize:12,fontWeight:600,transition:"all 0.2s",background:secId===s.id?s.color:"transparent",color:secId===s.id?textFor(s.color):"#6B5E4E"}}>{s.label}</button>
+          <button key={s.id} onClick={()=>{setSecId(s.id);setAdding(false);onSecChange?.(s.id);}} style={{padding:"6px 14px",borderRadius:9,border:"none",fontSize:12,fontWeight:600,transition:"all 0.2s",background:secId===s.id?s.color:"transparent",color:secId===s.id?textFor(s.color):"#6B5E4E"}}>{s.label}</button>
         ))}
       </div>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
@@ -920,7 +944,8 @@ function TaskboardsView({sections,byId,tasks,addTask,updateTask,deleteTask,compl
                   return (
                     <TaskCard key={task.id} task={task} secColor={sec.color} isOver={isOver} isDragging={dragId===task.id}
                       onDragStart={()=>onDragStart(task.id)} onDragOver={()=>onDragOver(col.key,task.id)}
-                      onDragEnd={onDragEnd} updateTask={updateTask} deleteTask={deleteTask} completeTask={completeTask}/>
+                      onDragEnd={onDragEnd} updateTask={updateTask} deleteTask={deleteTask} completeTask={completeTask}
+                      addTask={addTask} sections={sections}/>
                   );
                 })}
               </div>
@@ -943,7 +968,8 @@ function SpacerCard({task,isOver,isDragging,onDragStart,onDragOver,onDragEnd,del
     </div>
   );
 }
-function TaskCard({task,secColor,isOver,isDragging,onDragStart,onDragOver,onDragEnd,updateTask,deleteTask,completeTask}) {
+function TaskCard({task,secColor,isOver,isDragging,onDragStart,onDragOver,onDragEnd,updateTask,deleteTask,completeTask,addTask,sections}) {
+  const openCtx = React.useContext(CtxMenuCtx);
   const [open,   setOpen]   =useState(false);
   const [hasDue, setHasDue] =useState(!!task.dueDate);
   const [dueDate,setDueDate]=useState(task.dueDate||todayISO());
@@ -957,6 +983,17 @@ function TaskCard({task,secColor,isOver,isDragging,onDragStart,onDragOver,onDrag
   return (
     <div draggable onDragStart={e=>{e.stopPropagation();onDragStart();}} onDragOver={e=>{e.preventDefault();e.stopPropagation();onDragOver();}} onDragEnd={onDragEnd}
          className="hov-card"
+         onContextMenu={e=>{ if(!openCtx) return; openCtx(e,[
+           {label:"Edit",            action:()=>setOpen(true)},
+           {label:"Duplicate",       action:()=>addTask(task.sectionId,task.title,task.notes,{dueDate:task.dueDate,status:task.status})},
+           {label:"Move to…",        submenu:(sections||[]).filter(s=>s.id!==task.sectionId).map(s=>({label:s.label,action:()=>updateTask(task.id,{sectionId:s.id})}))},
+           {divider:true},
+           task.status==="done"
+             ?{label:"Mark as active",action:()=>updateTask(task.id,{status:"backlog",completedAt:null,monthCompleted:null})}
+             :{label:"Mark as done",  action:()=>completeTask(task.id)},
+           {divider:true},
+           {label:"Delete",danger:true,action:()=>deleteTask(task.id)},
+         ]); }}
          style={{background:"#FDFAF6",borderRadius:9,padding:"10px 12px",border:"1px solid #E3D9CC",borderLeft:`3px solid ${secColor}`,opacity:isDragging?0.35:1,outline:isOver?"2px dashed #8B7D6B":"none",boxShadow:"none",transition:"box-shadow 0.15s,opacity 0.15s",cursor:"grab"}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:6}}>
         <div style={{fontSize:13,fontWeight:500,color:done?"#9B8E80":"#1C1714",textDecoration:done?"line-through":"none",lineHeight:1.4,cursor:"pointer",userSelect:"none",flex:1}} onClick={()=>setOpen(o=>!o)}>
@@ -992,10 +1029,12 @@ function TaskCard({task,secColor,isOver,isDragging,onDragStart,onDragOver,onDrag
 // ─── Notes View ───────────────────────────────────────────────────────────────
 
 function NotesView({sections,byId,getSectionNotes,addNote,updateNoteField,deleteNote}) {
-  const [secId,     setSecId]     =useState(sections[0]?.id||"");
-  const [selNoteId, setSelNoteId] =useState(null);
-  const [collapsed, setCollapsed] =useState({});
-  const [confirmDel,setConfirmDel]=useState(null);
+  const openCtx = React.useContext(CtxMenuCtx);
+  const [secId,       setSecId]       =useState(sections[0]?.id||"");
+  const [selNoteId,   setSelNoteId]   =useState(null);
+  const [collapsed,   setCollapsed]   =useState({});
+  const [confirmDel,  setConfirmDel]  =useState(null);
+  const [renameTrigger,setRenameTrigger]=useState(null);
   const sec  =byId[secId]||sections[0]||{color:"#7C7166",label:""};
   const items=getSectionNotes(secId);
   const selNote=items.find(n=>n.id===selNoteId)||null;
@@ -1005,14 +1044,26 @@ function NotesView({sections,byId,getSectionNotes,addNote,updateNoteField,delete
     if(selNoteId&&!items.find(n=>n.id===selNoteId)) setSelNoteId(roots[0]?.id||null);
   },[secId,items.length]);
   const toggleCollapse=id=>setCollapsed(p=>({...p,[id]:!p[id]}));
-  function handleDelete(id){ setConfirmDel(id); }
+  function handleDelete(id){
+    const note = items.find(n=>n.id===id);
+    const isEmpty = (!note||note.title==="Untitled Note")&&(!note||!note.content||note.content.replace(/<[^>]*>/g,"").trim()==="");
+    if(isEmpty && noteDescendants(items,id).length===0){ deleteNote(secId,id); return; }
+    setConfirmDel(id);
+  }
   function renderNode(node,depth=0) {
     const children=noteChildren(items,node.id);
     const isOpen=!collapsed[node.id];
     const isActive=selNoteId===node.id;
     return (
       <div key={node.id}>
-        <div className={`note-row${isActive?" active":""}`} style={{paddingLeft:8+depth*16}} onClick={()=>setSelNoteId(node.id)}>
+        <div className={`note-row${isActive?" active":""}`} style={{paddingLeft:8+depth*16}} onClick={()=>setSelNoteId(node.id)}
+          onContextMenu={e=>{ if(!openCtx) return; openCtx(e,[
+            {label:"Rename",         action:()=>{ setSelNoteId(node.id); setRenameTrigger(node.id); }},
+            {label:"New child note", action:()=>addNote(secId,node.id)},
+            {label:"Duplicate",      action:()=>addNote(secId,node.parentId||null,{title:node.title+" (copy)",content:node.content})},
+            {divider:true},
+            {label:"Delete",danger:true,action:()=>handleDelete(node.id)},
+          ]); }}>
           <button onClick={e=>{e.stopPropagation();toggleCollapse(node.id);}}
             style={{width:14,height:14,border:"none",background:"transparent",color:"inherit",fontSize:9,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",opacity:children.length?1:0.2}}>
             {children.length?(isOpen?"▾":"▸"):"·"}
@@ -1063,7 +1114,8 @@ function NotesView({sections,byId,getSectionNotes,addNote,updateNoteField,delete
           {selNote
             ? <NoteEditor key={selNote.id} note={selNote} sectionColor={sec.color}
                 onTitleChange={t=>updateNoteField(secId,selNote.id,{title:t})}
-                onContentChange={c=>updateNoteField(secId,selNote.id,{content:c})}/>
+                onContentChange={c=>updateNoteField(secId,selNote.id,{content:c})}
+                focusTitle={renameTrigger===selNote.id} onFocusTitleDone={()=>setRenameTrigger(null)}/>
             : <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:10,color:"#9B8E80"}}>
                 <div style={{fontSize:28}}>📝</div>
                 <div style={{fontSize:14,fontWeight:600,color:"#6B5E4E"}}>No note selected</div>
@@ -1078,8 +1130,9 @@ function NotesView({sections,byId,getSectionNotes,addNote,updateNoteField,delete
 
 // ─── Note Editor ──────────────────────────────────────────────────────────────
 
-function NoteEditor({note,sectionColor,onTitleChange,onContentChange}) {
+function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,onFocusTitleDone}) {
   const editorRef  =useRef(null);
+  const titleRef   =useRef(null);
   const saveTimer  =useRef(null);
   const titleTimer =useRef(null);
   const [saved,   setSaved]   =useState(true);
@@ -1088,6 +1141,7 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange}) {
   const [showClr, setShowClr] =useState(false);
   const [fmtState,setFmtState]=useState({bold:false,italic:false,underline:false});
   useEffect(()=>{ if(editorRef.current) editorRef.current.innerHTML=note.content||"<p><br></p>"; },[]);
+  useEffect(()=>{ if(focusTitle && titleRef.current){ titleRef.current.focus(); titleRef.current.select(); onFocusTitleDone?.(); } },[focusTitle]);
   const schedSave=()=>{ setSaved(false); clearTimeout(saveTimer.current); saveTimer.current=setTimeout(()=>{ if(editorRef.current) onContentChange(editorRef.current.innerHTML); setSaved(true); },500); };
   const schedTitleSave=v=>{ setSaved(false); clearTimeout(titleTimer.current); titleTimer.current=setTimeout(()=>{ onTitleChange(v); setSaved(true); },400); };
   const refreshFmt=()=>setFmtState({bold:document.queryCommandState("bold"),italic:document.queryCommandState("italic"),underline:document.queryCommandState("underline")});
@@ -1116,7 +1170,7 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange}) {
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
       <div style={{padding:"16px 24px 0",borderBottom:"1px solid #EBE4D8",flexShrink:0}}>
-        <input value={titleVal} onChange={e=>{setTitleVal(e.target.value);schedTitleSave(e.target.value);}} onKeyDown={e=>e.key==="Enter"&&e.currentTarget.blur()} placeholder="Note title…"
+        <input ref={titleRef} value={titleVal} onChange={e=>{setTitleVal(e.target.value);schedTitleSave(e.target.value);}} onKeyDown={e=>e.key==="Enter"&&e.currentTarget.blur()} placeholder="Note title…"
           style={{...S.input,marginBottom:0,border:"none",background:"transparent",fontSize:17,fontWeight:700,fontFamily:'"Playfair Display",serif',padding:"0 0 14px",borderRadius:0}}/>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:3,padding:"7px 12px",background:"#F3EDE3",borderBottom:"1px solid #E3D9CC",flexWrap:"wrap",flexShrink:0}}>
@@ -1524,6 +1578,77 @@ function AppDialog({dialog,onClose}) {
           <button onClick={onClose} style={{...S.btnGhost,flex:isConfirm?0:1}}>{isConfirm?"Cancel":"OK"}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+// ─── Context Menu ─────────────────────────────────────────────────────────────
+
+function ContextMenu({x, y, items, onClose}) {
+  const menuRef  = useRef();
+  const [subIdx, setSubIdx]     = useState(null);
+  const [subAnchor, setSubAnchor] = useState(null);
+  const [adj, setAdj] = useState({left:x, top:y, opacity:0});
+  const MENU_W = 204;
+
+  useEffect(()=>{
+    const onKey  = e => { if(e.key==="Escape") onClose(); };
+    const onDown = e => { if(menuRef.current && !menuRef.current.contains(e.target)) onClose(); };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onDown);
+    return ()=>{ window.removeEventListener("keydown", onKey); window.removeEventListener("mousedown", onDown); };
+  },[]);
+
+  useEffect(()=>{
+    if(!menuRef.current) return;
+    const {width,height} = menuRef.current.getBoundingClientRect();
+    const vw=window.innerWidth, vh=window.innerHeight;
+    setAdj({ left: x+width  > vw-8 ? Math.max(8, x-width)  : x,
+             top:  y+height > vh-8 ? Math.max(8, y-height) : y,
+             opacity: 1 });
+  },[]);
+
+  return (
+    <div ref={menuRef} style={{position:"fixed",left:adj.left,top:adj.top,opacity:adj.opacity,
+      zIndex:500,background:"#FDFAF6",borderRadius:10,border:"1px solid #E3D9CC",
+      boxShadow:"0 8px 32px rgba(0,0,0,0.22)",minWidth:MENU_W,padding:"4px 0",
+      fontFamily:'"DM Sans",sans-serif',userSelect:"none",transition:"opacity 0.08s"}}>
+      {items.map((item,i)=>{
+        if(item.divider) return <div key={i} style={{height:1,background:"#E3D9CC",margin:"3px 0"}}/>;
+        const isHov = subIdx===i;
+        return (
+          <div key={i}
+            onMouseEnter={e=>{ setSubIdx(i); if(item.submenu) setSubAnchor(e.currentTarget.getBoundingClientRect()); }}
+            onMouseLeave={()=>{ if(!item.submenu) setSubIdx(null); }}
+            onClick={()=>{ if(!item.submenu && item.action){ item.action(); onClose(); } }}
+            className="ctx-item"
+            style={{padding:"7px 14px 7px 12px",fontSize:12,fontWeight:500,
+              color:item.danger?"#C43A3A":"#1C1714",
+              cursor:item.submenu?"default":"pointer",
+              display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,
+              background:isHov?(item.danger?"#FAE0E0":"#F3EDE3"):"transparent",
+              borderRadius:6,margin:"0 4px",transition:"background 0.1s"}}>
+            <span>{item.label}</span>
+            {item.submenu&&<span style={{fontSize:9,opacity:0.4}}>▸</span>}
+          </div>
+        );
+      })}
+      {subIdx!==null && items[subIdx]?.submenu && subAnchor && (
+        <div onMouseEnter={()=>setSubIdx(subIdx)} onMouseLeave={()=>setSubIdx(null)}
+          style={{position:"fixed",left:adj.left+MENU_W-2,top:subAnchor.top,
+            zIndex:501,background:"#FDFAF6",borderRadius:10,border:"1px solid #E3D9CC",
+            boxShadow:"0 8px 32px rgba(0,0,0,0.22)",minWidth:160,padding:"4px 0",
+            fontFamily:'"DM Sans",sans-serif',userSelect:"none"}}>
+          {items[subIdx].submenu.map((sub,j)=>(
+            <div key={j} onClick={()=>{ sub.action(); onClose(); }}
+              className="ctx-sub-item"
+              style={{padding:"7px 14px 7px 12px",fontSize:12,fontWeight:500,
+                color:"#1C1714",cursor:"pointer",borderRadius:6,margin:"0 4px",
+                transition:"background 0.1s"}}>{sub.label}</div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
