@@ -6,16 +6,29 @@ use tauri::{
     Manager,
 };
 use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
 
-// Sent to the frontend when an update is found
 #[derive(serde::Serialize)]
 struct UpdatePayload {
     version: String,
     notes: Option<String>,
 }
 
-// Called by JS: checks GitHub for a newer version
+#[tauri::command]
+fn app_version(app: tauri::AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+#[tauri::command]
+fn fire_notification(app: tauri::AppHandle, title: String, body: String) {
+    let _ = app.notification()
+        .builder()
+        .title(&title)
+        .body(&body)
+        .show();
+}
+
 #[tauri::command]
 async fn check_update(app: tauri::AppHandle) -> Result<Option<UpdatePayload>, String> {
     match app.updater() {
@@ -31,7 +44,6 @@ async fn check_update(app: tauri::AppHandle) -> Result<Option<UpdatePayload>, St
     }
 }
 
-// Called by JS when user clicks "Update Now" — downloads, installs, restarts
 #[tauri::command]
 async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     match app.updater() {
@@ -50,9 +62,14 @@ async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec![])))
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![check_update, install_update])
+        .plugin(tauri_plugin_notification::init())
+        .invoke_handler(tauri::generate_handler![
+            app_version, fire_notification,
+            check_update, install_update
+        ])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Open Progress You", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -61,14 +78,27 @@ fn main() {
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => { if let Some(w) = app.get_webview_window("main") { let _ = w.show(); let _ = w.set_focus(); } }
+                    "show" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
+                    }
                     "quit" => std::process::exit(0),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
                         let app = tray.app_handle();
-                        if let Some(w) = app.get_webview_window("main") { let _ = w.show(); let _ = w.set_focus(); }
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
                     }
                 })
                 .build(app)?;
@@ -76,8 +106,10 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let _ = window.hide();
-                api.prevent_close();
+                if window.label() == "main" {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
             }
         })
         .run(tauri::generate_context!())
