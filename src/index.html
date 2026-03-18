@@ -103,7 +103,14 @@ const EXPORT_VERSION = 6;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const uid = () => Math.random().toString(36).slice(2,10);
+const uid = () => {
+  const buf = new Uint8Array(10);
+  crypto.getRandomValues(buf);
+  const chars = "0123456789abcdefghijklmnopqrstuvwxyz";
+  let s = "";
+  for (let i = 0; i < 10; i++) s += chars[buf[i] % 36];
+  return s;
+};
 
 function textFor(hex="#888") {
   if(!hex||hex.length<7) return "#fff";
@@ -203,7 +210,7 @@ function ssetDebounced(k, v, delay=800) {
 
 // ─── Automatic backup ─────────────────────────────────────────────────────────
 
-const BACKUP_KEYS = ["py-sections","py-tt","py-tasks","py-notes","py-tt-templates","py-tt-setblocks"];
+const BACKUP_KEYS = ["py-sections","py-tt","py-tasks","py-notes","py-tt-templates","py-tt-setblocks","py-tt-archive"];
 const DEFAULT_BACKUP_HOURS = 24;
 
 async function getBackupInterval() {
@@ -296,8 +303,38 @@ function migrateTt(tt) {
   return out;
 }
 
+// Prune timetable weeks older than 6 months; archive them to a separate file
+const TT_PRUNE_MONTHS = 6;
+async function pruneTt(tt) {
+  if (!tt || typeof tt !== "object") return tt || {};
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - TT_PRUNE_MONTHS);
+  const cutoffStr = mondayOf(cutoff);
+  const keep = {};
+  const archive = {};
+  let pruned = 0;
+  for (const [wk, week] of Object.entries(tt)) {
+    if (wk < cutoffStr) {
+      // Only archive weeks that actually have blocks
+      const hasData = Object.values(week).some(arr => Array.isArray(arr) && arr.length > 0);
+      if (hasData) { archive[wk] = week; pruned++; }
+    } else {
+      keep[wk] = week;
+    }
+  }
+  if (pruned > 0) {
+    // Merge with existing archive
+    const existing = await sget("py-tt-archive") || {};
+    const merged = { ...existing, ...archive };
+    await sset("py-tt-archive", merged);
+    console.log("Timetable pruned: archived " + pruned + " old week(s)");
+  }
+  return keep;
+}
+
 function migrateTasks(tasks) {
   return tasks.map((t,i) => ({
+    ...t,
     order:         t.order         ?? i,
     priority:      t.priority      ?? "normal",
     checklist:     t.checklist     ?? [],
@@ -307,18 +344,17 @@ function migrateTasks(tasks) {
     remindAt:      t.remindAt      ?? null,
     remindFired:   t.remindFired   ?? false,
     archived:      t.archived      ?? false,
-    ...t,
   }));
 }
 function migrateNotes(notesMap) {
   const out = {};
   for(const [sid, arr] of Object.entries(notesMap)) {
     out[sid] = (Array.isArray(arr) ? arr : []).map(n => ({
+      ...n,
       tags:          n.tags          ?? [],
       linkedTaskIds: n.linkedTaskIds ?? [],
       remindAt:      n.remindAt      ?? null,
       remindFired:   n.remindFired   ?? false,
-      ...n,
     }));
   }
   return out;
@@ -439,7 +475,7 @@ function App() {
       const tmpl=await sget('py-tt-templates');
       const sb=await sget('py-tt-setblocks');
       if(sec) setSections(sec);
-      if(t)   setTt(migrateTt(t));
+      if(t) { const migrated = migrateTt(t); const pruned = await pruneTt(migrated); setTt(pruned); }
       if(k)   setTasks(migrateTasks(k));
       if(n)   setNotes(migrateNotes(n));
       if(tmpl) setTemplates(tmpl);
@@ -3527,6 +3563,12 @@ function MonthlyView({tasks,sections,byId,initialMode="calendar"}) {
 // ─── Stats View ───────────────────────────────────────────────────────────────
 
 function StatsView({tasks,tt,week,sections,byId,notes}) {
+  const [archivedTtCount,setArchivedTtCount]=React.useState(0);
+  React.useEffect(()=>{
+    sget("py-tt-archive").then(arch=>{
+      if(arch&&typeof arch==="object") setArchivedTtCount(Object.keys(arch).length);
+    });
+  },[]);
   const wBlocks=tt[week]||{};
   const secMins={};
   let totalMins=0;
@@ -3650,7 +3692,7 @@ function StatsView({tasks,tt,week,sections,byId,notes}) {
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:18}}>
               {[[totalTasks,"Total Tasks",activeTCount+" active, "+doneCount+" done"+(archivedCount>0?", "+archivedCount+" archived":"")],
                 [totalNotes,"Notes","across "+Object.keys(notes||{}).length+" sections"],
-                [ttWeekCount,"Timetable Weeks",oldestTtWeek&&newestTtWeek?oldestTtWeek+" to "+newestTtWeek:"no data"]
+                [ttWeekCount+(archivedTtCount>0?" (+"+archivedTtCount+" archived)":""),"Timetable Weeks",oldestTtWeek&&newestTtWeek?oldestTtWeek+" to "+newestTtWeek:"no data"]
               ].map(([v,l,s],i)=>(
                 <div key={i} style={{background:"#FDFAF6",borderRadius:10,padding:"14px 16px",border:"1px solid #E3D9CC"}}>
                   <div style={{fontSize:22,fontWeight:700,fontFamily:'"Playfair Display",serif'}}>{v}</div>
