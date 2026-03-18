@@ -99,7 +99,7 @@ const TEXT_COLORS = [
 
 // Bump this number whenever the data schema changes (new fields, renamed keys, etc.)
 // so exported files can be versioned and future imports can handle old formats.
-const EXPORT_VERSION = 6;
+const EXPORT_VERSION = 7;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -157,6 +157,22 @@ function todayName()   { return new Date().toLocaleDateString("en-GB",{weekday:"
 function nowStamp()    { return new Date().toISOString().slice(0,16).replace("T","_").replace(":","-"); }
 function todayISO()    { return new Date().toISOString().slice(0,10); }
 function addDays(iso,n){ const d=new Date(iso+"T12:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function dayIndex(iso){ const d=new Date(iso+"T12:00:00"); return (d.getDay()+6)%7; } // Monday=0
+function trackerStreak(trk) {
+  // Counts consecutive *scheduled* completions, skipping non-active days
+  let streak=0; const d=new Date(todayISO()+"T12:00:00");
+  for(let i=0;i<366;i++){
+    const iso=d.toISOString().slice(0,10); const di=(d.getDay()+6)%7;
+    if(trk.activeDays[di]){
+      if(trk.completions[iso]) streak++;
+      else if(iso===todayISO()) { /* today not yet done — don't break, just skip */ }
+      else break;
+    }
+    // non-active days are simply skipped (not counted, not breaking)
+    d.setDate(d.getDate()-1);
+  }
+  return streak;
+}
 function fmtDue(iso, dueTime=null, allDay=true) {
   const today=todayISO(), diff=Math.round((new Date(iso+"T12:00:00")-new Date(today+"T12:00:00"))/(1000*60*60*24));
   const d=new Date(iso+"T12:00:00");
@@ -177,7 +193,7 @@ function noteDescendants(items,id) {
   return children.flatMap(c=>[c.id,...noteDescendants(items,c.id)]);
 }
 function makeNote(parentId=null,order=0) {
-  return{id:uid(),parentId,title:"Untitled Note",content:"<p><br></p>",order,createdAt:Date.now(),tags:[],linkedTaskIds:[]};
+  return{id:uid(),parentId,title:"Untitled Note",content:"<p><br></p>",order,createdAt:Date.now(),tags:[],linkedTaskIds:[],linkedTrackerIds:[]};
 }
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
@@ -210,7 +226,7 @@ function ssetDebounced(k, v, delay=800) {
 
 // ─── Automatic backup ─────────────────────────────────────────────────────────
 
-const BACKUP_KEYS = ["py-sections","py-tt","py-tasks","py-notes","py-tt-templates","py-tt-setblocks","py-tt-archive"];
+const BACKUP_KEYS = ["py-sections","py-tt","py-tasks","py-notes","py-tt-templates","py-tt-setblocks","py-tt-archive","py-trackers"];
 const DEFAULT_BACKUP_HOURS = 24;
 
 async function getBackupInterval() {
@@ -343,7 +359,8 @@ function migrateTasks(tasks) {
     allDay:        t.allDay        ?? true,
     remindAt:      t.remindAt      ?? null,
     remindFired:   t.remindFired   ?? false,
-    archived:      t.archived      ?? false,
+    archived:          t.archived          ?? false,
+    linkedTrackerIds:  t.linkedTrackerIds  ?? [],
   }));
 }
 function migrateNotes(notesMap) {
@@ -351,13 +368,26 @@ function migrateNotes(notesMap) {
   for(const [sid, arr] of Object.entries(notesMap)) {
     out[sid] = (Array.isArray(arr) ? arr : []).map(n => ({
       ...n,
-      tags:          n.tags          ?? [],
-      linkedTaskIds: n.linkedTaskIds ?? [],
-      remindAt:      n.remindAt      ?? null,
-      remindFired:   n.remindFired   ?? false,
+      tags:              n.tags              ?? [],
+      linkedTaskIds:     n.linkedTaskIds     ?? [],
+      linkedTrackerIds:  n.linkedTrackerIds  ?? [],
+      remindAt:          n.remindAt          ?? null,
+      remindFired:       n.remindFired       ?? false,
     }));
   }
   return out;
+}
+function migrateTrackers(trackers) {
+  return (Array.isArray(trackers) ? trackers : []).map((t, i) => ({
+    ...t,
+    order:         t.order         ?? i,
+    color:         t.color         ?? "#0C7B7B",
+    activeDays:    t.activeDays    ?? [1,1,1,1,1,0,0],
+    completions:   t.completions   ?? {},
+    linkedTaskIds: t.linkedTaskIds ?? [],
+    linkedNoteIds: t.linkedNoteIds ?? [],
+    archived:      t.archived      ?? false,
+  }));
 }
 
 const PRIORITY = {
@@ -460,6 +490,7 @@ function App() {
   const [templates,    setTemplates]    = useState([]);
   const [setBlocks,    setSetBlocks]    = useState([]);
   const [showSearch,   setShowSearch]   = useState(false);
+  const [trackers,     setTrackers]     = useState([]);
   const [undoStack,    setUndoStack]    = useState([]);
   const undoTimers = useRef({});
 
@@ -474,12 +505,14 @@ function App() {
       const n  =await sget("py-notes");
       const tmpl=await sget('py-tt-templates');
       const sb=await sget('py-tt-setblocks');
+      const trk=await sget('py-trackers');
       if(sec) setSections(sec);
       if(t) { const migrated = migrateTt(t); const pruned = await pruneTt(migrated); setTt(pruned); }
       if(k)   setTasks(migrateTasks(k));
       if(n)   setNotes(migrateNotes(n));
       if(tmpl) setTemplates(tmpl);
       if(sb)   setSetBlocks(sb);
+      if(trk)  setTrackers(migrateTrackers(trk));
       setReady(true);
       checkForUpdate();
       runBackupIfDue();
@@ -491,6 +524,7 @@ function App() {
   useEffect(()=>{ if(ready) ssetDebounced("py-tt",tt); },[tt,ready]);
   useEffect(()=>{ if(ready) ssetDebounced("py-tasks",tasks); },[tasks,ready]);
   useEffect(()=>{ if(ready) ssetDebounced("py-notes",notes); },[notes,ready]);
+  useEffect(()=>{ if(ready) ssetDebounced("py-trackers",trackers); },[trackers,ready]);
 
   // ── Undo system — tracks last 5 destructive actions
   function pushUndo(title,detail,undoFn){
@@ -639,10 +673,10 @@ function App() {
     setTasks(prev=>{
       const maxOrder=prev.filter(t=>t.sectionId===sid).reduce((m,t)=>Math.max(m,t.order??0),0);
       return[{
-        id:uid(),sectionId:sid,title,notes:notesT,
+        id:extra.id||uid(),sectionId:sid,title,notes:notesT,
         type:extra.type||"task",status:extra.status||"backlog",
-        order:maxOrder+1,priority:"normal",
-        checklist:[],linkedNoteIds:[],
+        order:maxOrder+1,priority:extra.priority||"normal",
+        checklist:[],linkedNoteIds:[],linkedTrackerIds:[],
         dueDate:extra.dueDate||null,dueTime:null,allDay:true,remindAt:null,remindFired:false,
         createdAt:Date.now(),completedAt:null,monthCompleted:null
       },...prev];
@@ -688,6 +722,56 @@ function App() {
     });
   }
 
+  // ── Tracker ops
+  function addTracker(title,opts={}){
+    setTrackers(prev=>[{
+      id:uid(),title,sectionId:opts.sectionId||null,color:opts.color||"#0C7B7B",
+      activeDays:opts.activeDays||[1,1,1,1,1,0,0],completions:{},
+      linkedTaskIds:[],linkedNoteIds:[],order:prev.length,archived:false,createdAt:Date.now()
+    },...prev]);
+  }
+  function updateTracker(id,upd){ setTrackers(p=>p.map(t=>t.id===id?{...t,...upd}:t)); }
+  function deleteTracker(id){
+    const trk=trackers.find(t=>t.id===id);
+    setTrackers(p=>p.filter(t=>t.id!==id));
+    if(trk) pushUndo("Tracker deleted",trk.title,()=>setTrackers(prev=>[trk,...prev]));
+  }
+  function toggleTrackerDay(id,dateISO){
+    setTrackers(p=>p.map(t=>{
+      if(t.id!==id) return t;
+      const c={...t.completions};
+      if(c[dateISO]) delete c[dateISO]; else c[dateISO]=true;
+      return{...t,completions:c};
+    }));
+  }
+  function archiveTracker(id){
+    const trk=trackers.find(t=>t.id===id);
+    updateTracker(id,{archived:true});
+    if(trk) pushUndo("Tracker archived",trk.title,()=>updateTracker(id,{archived:false}));
+  }
+  function linkTrackerToTask(trackerId,taskId){
+    updateTracker(trackerId,{linkedTaskIds:[...(trackers.find(t=>t.id===trackerId)?.linkedTaskIds||[]),taskId]});
+    updateTask(taskId,{linkedTrackerIds:[...(tasks.find(t=>t.id===taskId)?.linkedTrackerIds||[]),trackerId]});
+  }
+  function unlinkTrackerFromTask(trackerId,taskId){
+    updateTracker(trackerId,{linkedTaskIds:(trackers.find(t=>t.id===trackerId)?.linkedTaskIds||[]).filter(x=>x!==taskId)});
+    updateTask(taskId,{linkedTrackerIds:(tasks.find(t=>t.id===taskId)?.linkedTrackerIds||[]).filter(x=>x!==trackerId)});
+  }
+  function linkTrackerToNote(trackerId,noteId,secId){
+    updateTracker(trackerId,{linkedNoteIds:[...(trackers.find(t=>t.id===trackerId)?.linkedNoteIds||[]),noteId]});
+    setNotes(prev=>{
+      const items=[...(prev[secId]||[])];
+      return{...prev,[secId]:items.map(n=>n.id===noteId?{...n,linkedTrackerIds:[...(n.linkedTrackerIds||[]),trackerId]}:n)};
+    });
+  }
+  function unlinkTrackerFromNote(trackerId,noteId,secId){
+    updateTracker(trackerId,{linkedNoteIds:(trackers.find(t=>t.id===trackerId)?.linkedNoteIds||[]).filter(x=>x!==noteId)});
+    setNotes(prev=>{
+      const items=[...(prev[secId]||[])];
+      return{...prev,[secId]:items.map(n=>n.id===noteId?{...n,linkedTrackerIds:(n.linkedTrackerIds||[]).filter(x=>x!==trackerId)}:n)};
+    });
+  }
+
   // ── Notes ops
   const getSectionNotes=sid=>{ const val=notes[sid]; return Array.isArray(val)?val:[]; };
   function addNote(sid,parentId=null,opts={}){
@@ -696,7 +780,7 @@ function App() {
       const siblings=items.filter(n=>n.parentId===(parentId||null));
       const order=siblings.length?Math.max(...siblings.map(n=>n.order))+1:0;
       const base=makeNote(parentId,order);
-      const newNote={...base,...(opts.title?{title:opts.title}:{}),...(opts.content?{content:opts.content}:{})};
+      const newNote={...base,...(opts.id?{id:opts.id}:{}),...(opts.title?{title:opts.title}:{}),...(opts.content?{content:opts.content}:{}),...(opts.linkedTrackerIds?{linkedTrackerIds:opts.linkedTrackerIds}:{})};
       return{...prev,[sid]:[...items,newNote]};
     });
   }
@@ -733,7 +817,8 @@ function App() {
       } else { payload.notes=notes; }
     }
     if(opts.inclSections) payload.sections=sections;
-    const mode=opts.inclTasks&&opts.inclNotes&&opts.inclTt&&opts.inclSections?"all":opts.inclSections&&!opts.inclTasks?"settings":"custom";
+    if(opts.inclTrackers) payload.trackers=trackers;
+    const mode=opts.inclTasks&&opts.inclNotes&&opts.inclTt&&opts.inclSections&&opts.inclTrackers?"all":opts.inclSections&&!opts.inclTasks?"settings":"custom";
     payload._export={mode,exportedAt:new Date().toISOString(),version:EXPORT_VERSION};
     const json=JSON.stringify(payload,null,2);
     const filename=`progress-you_export_${nowStamp()}.json`;
@@ -775,6 +860,7 @@ function App() {
         if(data.tt)       lines.push("timetable data");
         if(data.notes){const total=Object.values(data.notes).reduce((s,a)=>s+(Array.isArray(a)?a.length:1),0);lines.push(`${total} notes`);}
         if(data.sections) lines.push(`${data.sections.length} sections`);
+        if(data.trackers) lines.push(`${data.trackers.length} trackers`);
         setDialog({
           message:`Import "${mode}" backup?`,
           detail:`This will replace: ${lines.join(", ")}. This cannot be undone.`,
@@ -784,6 +870,7 @@ function App() {
             if(data.tt)       setTt(data.tt);
             if(data.notes)    setNotes(data.notes);
             if(data.sections) setSections(data.sections);
+            if(data.trackers) setTrackers(migrateTrackers(data.trackers));
             setDialog({message:"Import successful!",onClose:()=>setDialog(null)});
           },
           onClose:()=>setDialog(null)
@@ -888,7 +975,7 @@ function App() {
         </div>
 
         <nav style={{display:"flex",gap:3,background:"#2C2522",borderRadius:10,padding:3}}>
-          {[["today","Today"],["timetable","Timetable"],["boards","Taskboards"],["notes","Notes"],["calendar","Calendar"],["monthly","Log"],["stats","Stats"]].map(([v,l])=>(
+          {[["today","Today"],["timetable","Timetable"],["boards","Taskboards"],["notes","Notes"],["trackers","Trackers"],["calendar","Calendar"],["monthly","Log"],["stats","Stats"]].map(([v,l])=>(
             <button key={v} className="nav-p" onClick={()=>setView(v)}
               style={{background:view===v?"#F8F3EC":"transparent",color:view===v?"#1C1714":"#7A6C5E"}}>{l}</button>
           ))}
@@ -920,20 +1007,21 @@ function App() {
       </header>
 
       <main style={{padding:"24px 28px",maxWidth:1500,margin:"0 auto"}}>
-        {view==="today"     && <TodayView     {...tp} getDayBlocks={getDayBlocks} onOpenCapture={()=>setShowCap(true)}/>}
-        {view==="timetable" && <TimetableView sections={sections} byId={byId} getDayBlocks={getDayBlocks} upsertBlock={upsertBlock} deleteBlock={deleteBlock} templates={templates} addTemplate={addTemplate} updateTemplate={updateTemplate} deleteTemplate={deleteTemplate} applyTemplate={applyTemplate} tasks={tasks} notes={notes} setBlocks={setBlocks} addSetBlock={addSetBlock} removeSetBlock={removeSetBlock}/>}
+        {view==="today"     && <TodayView     {...tp} getDayBlocks={getDayBlocks} onOpenCapture={()=>setShowCap(true)} trackers={trackers} toggleTrackerDay={toggleTrackerDay}/>}
+        {view==="timetable" && <TimetableView sections={sections} byId={byId} getDayBlocks={getDayBlocks} upsertBlock={upsertBlock} deleteBlock={deleteBlock} templates={templates} addTemplate={addTemplate} updateTemplate={updateTemplate} deleteTemplate={deleteTemplate} applyTemplate={applyTemplate} tasks={tasks} notes={notes} setBlocks={setBlocks} addSetBlock={addSetBlock} removeSetBlock={removeSetBlock} trackers={trackers}/>}
         {view==="boards"    && <BoardsView    {...tp} notes={notes} setView={setView} initialSecId={lastBoardSec} onSecChange={setLastBoardSec} archiveTask={archiveTask} archiveDoneTasks={archiveDoneTasks}/>}
         {view==="notes"     && <NotesView     sections={sections} byId={byId} getSectionNotes={getSectionNotes} addNote={addNote} updateNoteField={updateNoteField} deleteNote={deleteNote} tasks={tasks} setView={setView} initialSecId={lastNoteKey.sec} initialNoteId={lastNoteKey.id} onNoteChange={(sec,id)=>setLastNoteKey({sec,id})}/>}
+        {view==="trackers"  && <TrackersView  trackers={trackers} addTracker={addTracker} updateTracker={updateTracker} deleteTracker={deleteTracker} toggleTrackerDay={toggleTrackerDay} archiveTracker={archiveTracker} sections={sections} byId={byId} tasks={tasks} notes={notes} addTask={addTask} addNote={addNote} linkTrackerToTask={linkTrackerToTask} unlinkTrackerFromTask={unlinkTrackerFromTask} linkTrackerToNote={linkTrackerToNote} unlinkTrackerFromNote={unlinkTrackerFromNote}/>}
         {view==="monthly"   && <MonthlyView   tasks={tasks} sections={sections} byId={byId} initialMode="log"/>}
         {view==="calendar"   && <MonthlyView   tasks={tasks} sections={sections} byId={byId} initialMode="calendar"/>}
-        {view==="stats"     && <StatsView     tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} notes={notes}/>}
+        {view==="stats"     && <StatsView     tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} notes={notes} trackers={trackers}/>}
       </main>
 
       {showSett && <SettingsModal sections={sections} setSections={setSections} onClose={()=>setShowSett(false)} checkForUpdate={checkForUpdate}
-        tasks={tasks} setTasks={setTasks} notes={notes} setNotes={setNotes} tt={tt} setTt={setTt}/>}
+        tasks={tasks} setTasks={setTasks} notes={notes} setNotes={setNotes} tt={tt} setTt={setTt} trackers={trackers} setTrackers={setTrackers}/>}
       {showIO   && <ImportExportModal onExport={exportData} onImport={importData} onClose={()=>setShowIO(false)} sections={sections}/>}
       {showCap  && <QuickCaptureModal sections={sections} byId={byId} addTask={addTask} addNote={addNote} onClose={()=>setShowCap(false)}/>}
-      {showSearch && <SearchModal tasks={tasks} notes={notes} sections={sections} byId={byId} tt={tt} onClose={()=>setShowSearch(false)}/>}
+      {showSearch && <SearchModal tasks={tasks} notes={notes} sections={sections} byId={byId} tt={tt} trackers={trackers} onClose={()=>setShowSearch(false)} setView={setView}/>}
       <AppDialog dialog={dialog} onClose={dialog?.onClose}/>
       {showUpdate && updateInfo && (
         <UpdateDialog
@@ -966,9 +1054,9 @@ function App() {
         ))}
       </div>
       {ctxMenu&&<ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={ctxMenu.items} onClose={()=>setCtxMenu(null)}/>}
-      {navStack.length>0&&<NavOverlay stack={navStack} tasks={tasks} notes={notes} byId={byId} updateTask={updateTask} completeTask={completeTask} onClose={()=>setNavStack([])} onNavigateToLevel={i=>setNavStack(s=>s.slice(0,i+1))}/>}
+      {navStack.length>0&&<NavOverlay stack={navStack} tasks={tasks} notes={notes} trackers={trackers} byId={byId} updateTask={updateTask} completeTask={completeTask} toggleTrackerDay={toggleTrackerDay} onClose={()=>setNavStack([])} onNavigateToLevel={i=>setNavStack(s=>s.slice(0,i+1))}/>}
     </div>
-      {showPin&&<PinOverlay tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} onClose={()=>setShowPin(false)} navigateTo={navigateTo} navigateToFresh={navigateToFresh} navigateToDate={navigateToDate}/>}
+      {showPin&&<PinOverlay tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} trackers={trackers} toggleTrackerDay={toggleTrackerDay} onClose={()=>setShowPin(false)} navigateTo={navigateTo} navigateToFresh={navigateToFresh} navigateToDate={navigateToDate}/>}
     </CtxMenuCtx.Provider>
     </NavCtx.Provider>
   );
@@ -1034,7 +1122,10 @@ function TimePicker({value, onChange, label}) {
   const [phase, setPhase] = useState("hour");
   const [open,  setOpen]  = useState(false);
   const [use12, setUse12] = useState(()=>{ try{ return sessionStorage.getItem("py-time-12h")==="1"; }catch{ return false; } });
+  const [dropPos, setDropPos] = useState({top:0,left:0});
   const ref = React.useRef(null);
+  const btnRef = React.useRef(null);
+  const dropRef = React.useRef(null);
 
   const [hStr, mStr] = (value||"09:00").split(":");
   const curH = parseInt(hStr)||0;
@@ -1058,7 +1149,11 @@ function TimePicker({value, onChange, label}) {
 
   useEffect(()=>{
     if(!open) return;
-    function handler(e){ if(ref.current&&!ref.current.contains(e.target)){ setOpen(false); setPhase("hour"); } }
+    function handler(e){
+      const inRef = ref.current && ref.current.contains(e.target);
+      const inDrop = dropRef.current && dropRef.current.contains(e.target);
+      if(!inRef && !inDrop){ setOpen(false); setPhase("hour"); }
+    }
     window.addEventListener("mousedown",handler);
     return()=>window.removeEventListener("mousedown",handler);
   },[open]);
@@ -1155,14 +1250,23 @@ function TimePicker({value, onChange, label}) {
   return (
     <div ref={ref} style={{position:"relative",flex:1}}>
       {label&&<span style={S.lbl}>{label}</span>}
-      <button onClick={()=>{setOpen(v=>!v);setPhase("hour");}}
+      <button ref={btnRef} onClick={()=>{
+          if(!open && btnRef.current){
+            const r=btnRef.current.getBoundingClientRect();
+            const spaceBelow=window.innerHeight-r.bottom-8;
+            const dropH=290;
+            if(spaceBelow>=dropH) setDropPos({top:r.bottom+4,left:r.left});
+            else setDropPos({top:r.top-dropH-4,left:r.left});
+          }
+          setOpen(function(v){return !v;}); setPhase("hour");
+        }}
         style={{...S.input,marginBottom:0,display:"flex",alignItems:"center",justifyContent:"space-between",
           cursor:"pointer",fontWeight:600,fontSize:14,color:"#1C1714",width:"100%",textAlign:"left",padding:"8px 12px"}}>
         <span>{displayVal()}</span>
         <span style={{fontSize:10,color:"#9B8E80"}}>{open?"▲":"▼"}</span>
       </button>
-      {open&&(
-        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,zIndex:400,background:"#FDFAF6",
+      {open&&ReactDOM.createPortal(
+        <div ref={dropRef} style={{position:"fixed",top:dropPos.top,left:dropPos.left,zIndex:9999,background:"#FDFAF6",
           borderRadius:12,border:"1.5px solid #E3D9CC",boxShadow:"0 8px 28px rgba(0,0,0,0.18)",
           padding:"10px",width:220}}>
           {/* Controls row */}
@@ -1187,7 +1291,8 @@ function TimePicker({value, onChange, label}) {
             </div>
           )}
           {phase==="hour"?<HourDial/>:<MinuteDial/>}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -1394,7 +1499,7 @@ function fuzzyMatch(text, query, maxDist) {
   return false;
 }
 
-function SearchModal({tasks,notes,sections,byId,tt,onClose}) {
+function SearchModal({tasks,notes,sections,byId,tt,trackers,onClose,setView}) {
   const {navigateToFresh,navigateToDate}=React.useContext(NavCtx)||{};
   const [query,setQuery]=useState("");
   const [selIdx,setSelIdx]=useState(0);
@@ -1484,12 +1589,22 @@ function SearchModal({tasks,notes,sections,byId,tt,onClose}) {
     }
   }
 
-  const results=[...taskResults,...noteResults,...blockResults.slice(0,8)];
+  // Search trackers
+  const trackerResults=q?(trackers||[]).filter(t=>
+    !t.archived&&matches(t.title)
+  ).slice(0,8).map(t=>({
+    kind:"tracker",id:t.id,title:t.title,
+    section:byId[t.sectionId],
+    detail:DAYS.filter(function(_,i){return t.activeDays[i];}).map(function(d){return d.slice(0,3);}).join(", "),
+  })):[];
+
+  const results=[...taskResults,...noteResults,...trackerResults,...blockResults.slice(0,8)];
   useEffect(()=>{ setSelIdx(0); },[query,showArchived]);
 
   function handleClick(r){
     if(r.kind==="task") navigateToFresh?.({type:"task",id:r.id});
     else if(r.kind==="note") navigateToFresh?.({type:"note",id:r.id});
+    else if(r.kind==="tracker"){ setView?.("trackers"); }
     else if(r.kind==="block"&&r.week&&r.day) navigateToDate?.(weekDayToISO(r.week,r.day));
     onClose();
   }
@@ -1500,9 +1615,9 @@ function SearchModal({tasks,notes,sections,byId,tt,onClose}) {
     if(e.key==="Enter"&&results[selIdx]){ e.preventDefault(); handleClick(results[selIdx]); }
   }
 
-  const TYPE_ICON={task:"&#x1F4CB;",note:"&#x1F4DD;",block:"&#x1F4C5;"};
-  const TYPE_LABEL={task:"Task",note:"Note",block:"Block"};
-  const TYPE_COLOR={task:"#4B3FC7",note:"#6B3FC7",block:"#2A6FAD"};
+  const TYPE_ICON={task:"&#x1F4CB;",note:"&#x1F4DD;",block:"&#x1F4C5;",tracker:"&#x1F4CA;"};
+  const TYPE_LABEL={task:"Task",note:"Note",block:"Block",tracker:"Tracker"};
+  const TYPE_COLOR={task:"#4B3FC7",note:"#6B3FC7",block:"#2A6FAD",tracker:"#0C7B7B"};
 
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(28,23,20,0.72)",display:"flex",alignItems:"flex-start",justifyContent:"center",zIndex:300,padding:"80px 20px 20px"}}>
@@ -1672,6 +1787,7 @@ function ImportExportModal({onExport,onImport,onClose,sections}) {
   const [inclTasks,   setInclTasks]   = useState(true);
   const [inclTt,      setInclTt]      = useState(true);
   const [inclNotes,   setInclNotes]   = useState(true);
+  const [inclTrackers,setInclTrackers]= useState(true);
   const [taskSecIds,  setTaskSecIds]  = useState([]); // empty = all
   const [noteSecIds,  setNoteSecIds]  = useState([]);
   const [dateFrom,    setDateFrom]    = useState("");
@@ -1682,11 +1798,11 @@ function ImportExportModal({onExport,onImport,onClose,sections}) {
   }
 
   function doExport(){
-    onExport({inclSections,inclTasks,taskSecIds,dateFrom:dateFrom||null,dateTo:dateTo||null,inclTt,inclNotes,noteSecIds});
+    onExport({inclSections,inclTasks,taskSecIds,dateFrom:dateFrom||null,dateTo:dateTo||null,inclTt,inclNotes,noteSecIds,inclTrackers});
     onClose();
   }
 
-  const anythingSelected=inclSections||inclTasks||inclTt||inclNotes;
+  const anythingSelected=inclSections||inclTasks||inclTt||inclNotes||inclTrackers;
 
   return (
     <Overlay onClose={onClose} width={520}>
@@ -1705,7 +1821,7 @@ function ImportExportModal({onExport,onImport,onClose,sections}) {
           {/* What to include */}
           <label style={S.lbl}>Include</label>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
-            {[[inclSections,setInclSections,"Sections (settings)"],[inclTasks,setInclTasks,"Tasks"],[inclTt,setInclTt,"Timetable"],[inclNotes,setInclNotes,"Notes"]].map(([val,set,label],i)=>(
+            {[[inclSections,setInclSections,"Sections (settings)"],[inclTasks,setInclTasks,"Tasks"],[inclTt,setInclTt,"Timetable"],[inclNotes,setInclNotes,"Notes"],[inclTrackers,setInclTrackers,"Trackers"]].map(([val,set,label],i)=>(
               <label key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"#F3EDE3",borderRadius:8,border:`1.5px solid ${val?"#4B3FC7":"#E3D9CC"}`,cursor:"pointer",fontSize:12,fontWeight:500}}>
                 <input type="checkbox" checked={val} onChange={()=>set(v=>!v)} style={{accentColor:"#4B3FC7",width:14,height:14}}/>
                 {label}
@@ -1786,11 +1902,14 @@ function ImportExportModal({onExport,onImport,onClose,sections}) {
 
 // ─── Today View ───────────────────────────────────────────────────────────────
 
-function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onOpenCapture}) {
+function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onOpenCapture,trackers,toggleTrackerDay}) {
   const dayName  = todayName();
   const blocks   = getDayBlocks(dayName);
   const dateStr  = new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   const todaySids= [...new Set(blocks.filter(b=>b.sectionId&&b.sectionId!=="overhead"&&byId[b.sectionId]).map(b=>b.sectionId))];
+  const todayDi  = dayIndex(todayISO());
+  const todayTrackers=(trackers||[]).filter(t=>!t.archived&&t.activeDays[todayDi]);
+  const today=todayISO();
 
   return (
     <div>
@@ -1807,6 +1926,31 @@ function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onO
 
       {/* Upcoming digest — always shown if there are dated tasks */}
       <UpcomingDigest tasks={tasks} byId={byId} completeTask={completeTask} updateTask={updateTask}/>
+
+      {/* Daily Trackers */}
+      {todayTrackers.length>0&&(
+        <div style={{marginBottom:20,background:"#EBE4D8",borderRadius:14,padding:"16px 18px"}}>
+          <Cap>Daily Trackers</Cap>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {todayTrackers.map(trk=>{
+              const done=trk.completions[today];
+              const streak=trackerStreak(trk);
+              return (
+                <div key={trk.id} onClick={()=>toggleTrackerDay(trk.id,today)}
+                  style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,cursor:"pointer",
+                    background:done?"#D4F0E0":"#F8F3EC",border:done?"1.5px solid #1A7A43":"1px solid #E3D9CC"}}>
+                  <div style={{width:20,height:20,borderRadius:5,border:"2px solid "+trk.color,
+                    background:done?trk.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",
+                    color:"#fff",fontSize:12,fontWeight:700}}>{done?"\u2713":""}</div>
+                  <span style={{fontSize:13,fontWeight:500,flex:1,textDecoration:done?"line-through":"none",
+                    color:done?"#1A7A43":"#1C1714"}}>{trk.title}</span>
+                  {streak>0&&<span style={{fontSize:10,fontWeight:600,color:trk.color,background:trk.color+"18",padding:"2px 7px",borderRadius:4}}>{streak}d streak</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Schedule + mini boards */}
       {blocks.length===0 ? (
@@ -1959,7 +2103,7 @@ function MiniCol({label,labelColor,tasks,secColor,updateTask,completeTask}) {
 
 function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
                         templates,addTemplate,updateTemplate,deleteTemplate,applyTemplate,
-                        tasks,notes,setBlocks,addSetBlock,removeSetBlock}) {
+                        tasks,notes,setBlocks,addSetBlock,removeSetBlock,trackers}) {
   const openCtx = React.useContext(CtxMenuCtx);
   const {navigateTo} = React.useContext(NavCtx)||{};
   const allNotes = Object.values(notes||{}).flat();
@@ -2021,6 +2165,7 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
   function resolveLinked(item){
     if(item.type==="task"){ const t=(tasks||[]).find(t=>t.id===item.id); return{label:t?.title||item.snapshot,live:!!t,obj:t}; }
     if(item.type==="note"){ const n=allNotes.find(n=>n.id===item.id); return{label:n?.title||item.snapshot,live:!!n,obj:n}; }
+    if(item.type==="tracker"){ const t=(trackers||[]).find(t=>t.id===item.id); return{label:t?.title||item.snapshot,live:!!t,obj:t}; }
     return{label:item.snapshot,live:false,obj:null};
   }
 
@@ -2158,7 +2303,7 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
       </div>
 
       {modal&&<BlockModal day={modal.day} block={modal.block} sections={sections}
-        tasks={tasks} allNotes={allNotes} addSetBlock={addSetBlock}
+        tasks={tasks} allNotes={allNotes} trackers={trackers} addSetBlock={addSetBlock}
         dayBlocks={modal.day?getDayBlocks(modal.day):[]}
         onSave={(day,blk)=>{upsertBlock(day,blk);setModal(null);}}
         onDelete={(day,id)=>{deleteBlock(day,id);setModal(null);}}
@@ -2166,7 +2311,7 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
 
       {tmplModal&&<TemplateModal
         template={tmplModal==="new"?null:tmplModal}
-        sections={sections} byId={byId} tasks={tasks} allNotes={allNotes}
+        sections={sections} byId={byId} tasks={tasks} allNotes={allNotes} trackers={trackers}
         onSave={t=>{ if(tmplModal==="new") addTemplate(t); else updateTemplate(t); setTmplModal(null); }}
         onClose={()=>setTmplModal(null)}/>}
     </div>
@@ -2175,7 +2320,7 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
 
 // ─── Block Modal ──────────────────────────────────────────────────────────────
 
-function BlockModal({day,block,sections,onSave,onDelete,onClose,tasks,allNotes,addSetBlock,dayBlocks}) {
+function BlockModal({day,block,sections,onSave,onDelete,onClose,tasks,allNotes,trackers,addSetBlock,dayBlocks}) {
   const {navigateTo}=React.useContext(NavCtx)||{};
   const [type,    setType]    = useState(block?.type||"section");
   const [secId,   setSecId]   = useState(block?.sectionId||sections[0]?.id||"");
@@ -2212,17 +2357,22 @@ function BlockModal({day,block,sections,onSave,onDelete,onClose,tasks,allNotes,a
   const [noteSearch,setNoteSearch]=useState("");
   const [showTaskPick,setShowTaskPick]=useState(false);
   const [showNotePick,setShowNotePick]=useState(false);
+  const [trackerSearch,setTrackerSearch]=useState("");
+  const [showTrackerPick,setShowTrackerPick]=useState(false);
 
   const sec=sections.find(s=>s.id===secId)||sections[0]||{color:"#7C7166"};
   const filteredTasks=(tasks||[]).filter(t=>t.type!=="spacer"&&!linkedItems.find(i=>i.type==="task"&&i.id===t.id)&&(!taskSearch||t.title.toLowerCase().includes(taskSearch.toLowerCase()))).slice(0,10);
   const filteredNotes=(allNotes||[]).filter(n=>!linkedItems.find(i=>i.type==="note"&&i.id===n.id)&&(!noteSearch||n.title.toLowerCase().includes(noteSearch.toLowerCase()))).slice(0,10);
+  const filteredTrackers=(trackers||[]).filter(t=>!t.archived&&!linkedItems.find(i=>i.type==="tracker"&&i.id===t.id)&&(!trackerSearch||t.title.toLowerCase().includes(trackerSearch.toLowerCase()))).slice(0,10);
 
   function linkTask(t){ setLinkedItems(p=>[...p,{type:"task",id:t.id,snapshot:t.title}]); setTaskSearch(""); setShowTaskPick(false); }
   function linkNote(n){ setLinkedItems(p=>[...p,{type:"note",id:n.id,snapshot:n.title}]); setNoteSearch(""); setShowNotePick(false); }
+  function linkTracker(t){ setLinkedItems(p=>[...p,{type:"tracker",id:t.id,snapshot:t.title}]); setTrackerSearch(""); setShowTrackerPick(false); }
   function unlinkItem(idx){ setLinkedItems(p=>p.filter((_,i)=>i!==idx)); }
 
   function resolveItem(item){
     if(item.type==="task"){ const t=(tasks||[]).find(t=>t.id===item.id); return{label:t?.title||item.snapshot,live:!!t,obj:t}; }
+    if(item.type==="tracker"){ const t=(trackers||[]).find(t=>t.id===item.id); return{label:t?.title||item.snapshot,live:!!t,obj:t}; }
     const n=(allNotes||[]).find(n=>n.id===item.id); return{label:n?.title||item.snapshot,live:!!n,obj:n};
   }
 
@@ -2265,7 +2415,7 @@ function BlockModal({day,block,sections,onSave,onDelete,onClose,tasks,allNotes,a
           const r=resolveItem(item);
           return (
             <div key={i} style={{display:"flex",alignItems:"center",gap:6,marginBottom:5,padding:"4px 8px",borderRadius:7,background:"#FDFAF6",border:"1px solid #E3D9CC"}}>
-              <span style={{fontSize:11,color:item.type==="task"?"#4B3FC7":"#6B3FC7",fontWeight:600,flexShrink:0}}>{item.type==="task"?"Task":"Note"}</span>
+              <span style={{fontSize:11,color:item.type==="task"?"#4B3FC7":item.type==="tracker"?"#0C7B7B":"#6B3FC7",fontWeight:600,flexShrink:0}}>{item.type==="task"?"Task":item.type==="tracker"?"Tracker":"Note"}</span>
               <span onClick={()=>r.live&&navigateTo?.({type:item.type,id:item.id})}
                 style={{fontSize:12,flex:1,color:r.live?"#1C1714":"#9B8E80",fontStyle:r.live?"normal":"italic",cursor:r.live?"pointer":"default",textDecoration:r.live?"underline":"none"}}>
                 {r.label}{!r.live&&" (removed)"}
@@ -2277,7 +2427,7 @@ function BlockModal({day,block,sections,onSave,onDelete,onClose,tasks,allNotes,a
         <div style={{display:"flex",gap:6,marginTop:linkedItems.length?6:0,flexWrap:"wrap"}}>
           {/* Add task */}
           <div style={{position:"relative"}}>
-            <button onClick={()=>{setShowTaskPick(v=>!v);setShowNotePick(false);}} style={{...S.btnMicro,fontSize:11}}>+ Task</button>
+            <button onClick={()=>{setShowTaskPick(v=>!v);setShowNotePick(false);setShowTrackerPick(false);}} style={{...S.btnMicro,fontSize:11}}>+ Task</button>
             {showTaskPick&&(
               <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,zIndex:300,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:9,padding:8,minWidth:230,maxHeight:200,overflowY:"auto",boxShadow:"0 4px 16px rgba(0,0,0,0.13)"}}>
                 <input value={taskSearch} onChange={e=>setTaskSearch(e.target.value)} placeholder="Search tasks…"
@@ -2293,7 +2443,7 @@ function BlockModal({day,block,sections,onSave,onDelete,onClose,tasks,allNotes,a
           </div>
           {/* Add note */}
           <div style={{position:"relative"}}>
-            <button onClick={()=>{setShowNotePick(v=>!v);setShowTaskPick(false);}} style={{...S.btnMicro,fontSize:11}}>+ Note</button>
+            <button onClick={()=>{setShowNotePick(v=>!v);setShowTaskPick(false);setShowTrackerPick(false);}} style={{...S.btnMicro,fontSize:11}}>+ Note</button>
             {showNotePick&&(
               <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,zIndex:300,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:9,padding:8,minWidth:230,maxHeight:200,overflowY:"auto",boxShadow:"0 4px 16px rgba(0,0,0,0.13)"}}>
                 <input value={noteSearch} onChange={e=>setNoteSearch(e.target.value)} placeholder="Search notes…"
@@ -2303,6 +2453,24 @@ function BlockModal({day,block,sections,onSave,onDelete,onClose,tasks,allNotes,a
                   <div key={n.id} onClick={()=>linkNote(n)} style={{fontSize:12,padding:"5px 8px",borderRadius:6,cursor:"pointer"}}
                     onMouseEnter={e=>e.currentTarget.style.background="#EBE4D8"}
                     onMouseLeave={e=>e.currentTarget.style.background="transparent"}>{n.title}</div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Add tracker */}
+          <div style={{position:"relative"}}>
+            <button onClick={()=>{setShowTrackerPick(v=>!v);setShowTaskPick(false);setShowNotePick(false);}} style={{...S.btnMicro,fontSize:11}}>+ Tracker</button>
+            {showTrackerPick&&(
+              <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,zIndex:300,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:9,padding:8,minWidth:230,maxHeight:200,overflowY:"auto",boxShadow:"0 4px 16px rgba(0,0,0,0.13)"}}>
+                <input value={trackerSearch} onChange={e=>setTrackerSearch(e.target.value)} placeholder="Search trackers…"
+                  style={{...S.input,marginBottom:6,padding:"5px 8px",fontSize:11}} autoFocus/>
+                {filteredTrackers.length===0&&<div style={{fontSize:11,color:"#9B8E80",padding:"4px 2px"}}>No trackers found.</div>}
+                {filteredTrackers.map(t=>(
+                  <div key={t.id} onClick={()=>linkTracker(t)} style={{fontSize:12,padding:"5px 8px",borderRadius:6,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#EBE4D8"}
+                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                    <span style={{width:8,height:8,borderRadius:3,background:t.color,flexShrink:0}}/>{t.title}
+                  </div>
                 ))}
               </div>
             )}
@@ -2323,7 +2491,7 @@ function BlockModal({day,block,sections,onSave,onDelete,onClose,tasks,allNotes,a
 
 // ─── Template Modal ───────────────────────────────────────────────────────────
 
-function TemplateModal({template,sections,byId,tasks,allNotes,onSave,onClose}) {
+function TemplateModal({template,sections,byId,tasks,allNotes,trackers,onSave,onClose}) {
   const openCtx=React.useContext(CtxMenuCtx);
   const isNew=!template;
   const [name,  setName]  = useState(template?.name||"");
@@ -2393,7 +2561,7 @@ function TemplateModal({template,sections,byId,tasks,allNotes,onSave,onClose}) {
           );
         })}
       </div>
-      {modal&&<BlockModal day={modal.day} block={modal.block} sections={sections} tasks={tasks} allNotes={allNotes}
+      {modal&&<BlockModal day={modal.day} block={modal.block} sections={sections} tasks={tasks} allNotes={allNotes} trackers={trackers}
         onSave={(day,blk)=>{upsertTmplBlock(day,blk);setModal(null);}}
         onDelete={(day,id)=>{deleteTmplBlock(day,id);setModal(null);}}
         onClose={()=>setModal(null)}/>}
@@ -2404,19 +2572,20 @@ function TemplateModal({template,sections,byId,tasks,allNotes,onSave,onClose}) {
 
 // ─── Add Task Modal ───────────────────────────────────────────────────────────
 
-function AddTaskModal({secColor,onClose,onAdd}) {
-  const [title,    setTitle]    = useState("");
+function AddTaskModal({secColor,onClose,onAdd,initialTitle}) {
+  const [title,    setTitle]    = useState(initialTitle||"");
   const [notes,    setNotes]    = useState("");
   const [hasDue,   setHasDue]   = useState(false);
   const [dueDate,  setDueDate]  = useState(todayISO());
   const [status,   setStatus]   = useState("backlog");
+  const [priority, setPriority] = useState("normal");
   const [checklist,setChecklist]= useState([]);
   const [newItem,  setNewItem]  = useState("");
   function addItem(){ if(!newItem.trim()) return; setChecklist(p=>[...p,{id:uid(),text:newItem.trim(),done:false}]); setNewItem(""); }
   function removeItem(id){ setChecklist(p=>p.filter(i=>i.id!==id)); }
   function handleAdd(){
     if(!title.trim()) return;
-    onAdd(title.trim(),notes.trim(),{dueDate:hasDue?dueDate:null,status,checklist});
+    onAdd(title.trim(),notes.trim(),{dueDate:hasDue?dueDate:null,status,checklist,priority});
   }
   const STATUSES=[{key:"backlog",label:"Backlog",color:"#8B7D6B"},{key:"this-week",label:"This Week",color:"#4B3FC7"},{key:"done",label:"Done",color:"#1A7A43"}];
   return (
@@ -2440,6 +2609,18 @@ function AddTaskModal({secColor,onClose,onAdd}) {
                 color:status===s.key?s.color:"#7A6C5E",fontSize:12,fontWeight:600}}>
               {s.label}
             </button>
+          ))}
+        </div>
+      </div>
+      {/* Priority */}
+      <div style={{marginBottom:12}}>
+        <label style={S.lbl}>Priority</label>
+        <div style={{display:"flex",gap:6}}>
+          {[["high","↑ High","#C43A3A"],["normal","Normal","#7A6C5E"],["low","↓ Low","#9B8E80"]].map(([k,l,c])=>(
+            <button key={k} onClick={()=>setPriority(k)}
+              style={{flex:1,padding:"7px 0",borderRadius:8,border:"2px solid "+(priority===k?c:"#D6CEC3"),
+                background:priority===k?c+"18":"transparent",
+                color:priority===k?c:"#7A6C5E",fontSize:12,fontWeight:600}}>{l}</button>
           ))}
         </div>
       </div>
@@ -3276,7 +3457,47 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
 
 // ─── Navigation Overlay ───────────────────────────────────────────────────────
 
-function NavOverlay({stack,tasks,notes,byId,updateTask,completeTask,onClose,onNavigateToLevel}) {
+function TrackerNavPanel({trackerId,trackers,byId,toggleTrackerDay}) {
+  const trk=(trackers||[]).find(t=>t.id===trackerId);
+  if(!trk) return <div style={{padding:24,color:"#9B8E80"}}>Tracker not found.</div>;
+  const today=todayISO();
+  const todayDi=dayIndex(today);
+  const done=trk.completions[today];
+  const streak=trackerStreak(trk);
+  const sec=byId[trk.sectionId];
+  return (
+    <div style={{padding:20}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+        <div style={{width:12,height:12,borderRadius:4,background:trk.color}}/>
+        <h3 style={{fontFamily:'"Playfair Display",serif',fontSize:18,margin:0}}>{trk.title}</h3>
+        {sec&&<span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:4,background:sec.color+"20",color:sec.color}}>{sec.label}</span>}
+      </div>
+      <div style={{fontSize:12,color:"#7A6C5E",marginBottom:12}}>Active: {DAYS.filter(function(_,i){return trk.activeDays[i];}).map(function(d){return d.slice(0,3);}).join(", ")}</div>
+      {trk.activeDays[todayDi]&&(
+        <div onClick={()=>toggleTrackerDay(trk.id,today)}
+          style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:9,cursor:"pointer",marginBottom:16,
+            background:done?"#D4F0E0":"#F8F3EC",border:done?"1.5px solid #1A7A43":"1px solid #E3D9CC"}}>
+          <div style={{width:22,height:22,borderRadius:5,border:"2px solid "+trk.color,
+            background:done?trk.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",
+            color:"#fff",fontSize:13,fontWeight:700}}>{done?"\u2713":""}</div>
+          <span style={{fontSize:14,fontWeight:600}}>{done?"Completed today":"Mark as done today"}</span>
+        </div>
+      )}
+      <div style={{display:"flex",gap:12}}>
+        <div style={{flex:1,background:"#EBE4D8",borderRadius:10,padding:"10px 12px"}}>
+          <div style={{fontSize:20,fontWeight:700,fontFamily:'"Playfair Display",serif',color:trk.color}}>{streak}</div>
+          <div style={{fontSize:11,fontWeight:600,color:"#4A3F30"}}>Current Streak</div>
+        </div>
+        <div style={{flex:1,background:"#EBE4D8",borderRadius:10,padding:"10px 12px"}}>
+          <div style={{fontSize:20,fontWeight:700,fontFamily:'"Playfair Display",serif',color:trk.color}}>{Object.keys(trk.completions).length}</div>
+          <div style={{fontSize:11,fontWeight:600,color:"#4A3F30"}}>Total</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NavOverlay({stack,tasks,notes,trackers,byId,updateTask,completeTask,toggleTrackerDay,onClose,onNavigateToLevel}) {
   const allNotes=Object.values(notes||{}).flat();
   const {navigateTo,navigateToDate}=React.useContext(NavCtx)||{};
   const current=stack[stack.length-1];
@@ -3284,6 +3505,7 @@ function NavOverlay({stack,tasks,notes,byId,updateTask,completeTask,onClose,onNa
   function labelFor(item){
     if(item.type==="task"){ const t=tasks.find(t=>t.id===item.id); return "Task: "+(t?.title||"Untitled"); }
     if(item.type==="note"){ const n=allNotes.find(n=>n.id===item.id); return "Note: "+(n?.title||"Untitled"); }
+    if(item.type==="tracker"){ const t=(trackers||[]).find(t=>t.id===item.id); return "Tracker: "+(t?.title||"Untitled"); }
     return item.type;
   }
 
@@ -3317,6 +3539,7 @@ function NavOverlay({stack,tasks,notes,byId,updateTask,completeTask,onClose,onNa
         <div style={{flex:1,overflowY:"auto"}}>
           {current?.type==="task"&&<TaskPanel taskId={current.id} tasks={tasks} allNotes={allNotes} byId={byId} updateTask={updateTask} completeTask={completeTask}/>}
           {current?.type==="note"&&<NotePanel noteId={current.id} allNotes={allNotes} tasks={tasks} byId={byId}/>}
+          {current?.type==="tracker"&&<TrackerNavPanel trackerId={current.id} trackers={trackers} byId={byId} toggleTrackerDay={toggleTrackerDay}/>}
         </div>
       </div>
     </div>
@@ -3630,9 +3853,393 @@ function MonthlyView({tasks,sections,byId,initialMode="calendar"}) {
     </div>
   );
 }
+// ─── Trackers View ────────────────────────────────────────────────────────────
+
+function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTrackerDay,archiveTracker,sections,byId,tasks,notes,addTask,addNote,linkTrackerToTask,unlinkTrackerFromTask,linkTrackerToNote,unlinkTrackerFromNote}) {
+  const {navigateToFresh}=React.useContext(NavCtx)||{};
+  const {openCtx}=React.useContext(CtxMenuCtx)||{};
+  const [selId,setSelId]=useState(null);
+  const [showCreate,setShowCreate]=useState(false);
+  const [editId,setEditId]=useState(null);
+  const [showAddTask,setShowAddTask]=useState(false);
+  const [showPinTask,setShowPinTask]=useState(false);
+  const [showPinNote,setShowPinNote]=useState(false);
+  const [pinTaskQ,setPinTaskQ]=useState("");
+  const [pinNoteQ,setPinNoteQ]=useState("");
+  const pinTaskRef=useRef(null);
+  const pinNoteRef=useRef(null);
+  useEffect(()=>{
+    if(!showPinTask&&!showPinNote) return;
+    function handler(e){
+      if(showPinTask&&pinTaskRef.current&&!pinTaskRef.current.contains(e.target)) setShowPinTask(false);
+      if(showPinNote&&pinNoteRef.current&&!pinNoteRef.current.contains(e.target)) setShowPinNote(false);
+    }
+    window.addEventListener("mousedown",handler);
+    return()=>window.removeEventListener("mousedown",handler);
+  },[showPinTask,showPinNote]);
+
+  const active=trackers.filter(t=>!t.archived);
+  const grouped=sections.map(sec=>({sec,items:active.filter(t=>t.sectionId===sec.id)})).filter(g=>g.items.length>0);
+  const ungrouped=active.filter(t=>!t.sectionId);
+  const sel=trackers.find(t=>t.id===selId)||active[0]||null;
+  const today=todayISO();
+
+  // Monthly calendar for selected tracker
+  function MonthGrid({trk}){
+    const now=new Date();
+    const [monthOff,setMonthOff]=useState(0);
+    const ref=new Date(now.getFullYear(),now.getMonth()+monthOff,1);
+    const year=ref.getFullYear(),month=ref.getMonth();
+    const monthLabel=ref.toLocaleDateString("en-GB",{month:"long",year:"numeric"});
+    const firstDay=(new Date(year,month,1).getDay()+6)%7; // Monday=0
+    const daysInMonth=new Date(year,month+1,0).getDate();
+    const cells=[];
+    for(let i=0;i<firstDay;i++) cells.push(null);
+    for(let d=1;d<=daysInMonth;d++){
+      const iso=[year,String(month+1).padStart(2,"0"),String(d).padStart(2,"0")].join("-");
+      const di=(new Date(year,month,d).getDay()+6)%7;
+      cells.push({day:d,iso,active:trk.activeDays[di],done:trk.completions[iso]});
+    }
+    return (
+      <div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <button onClick={()=>setMonthOff(m=>m-1)} style={{...S.btnMicro,padding:"2px 8px"}}>&#x25C0;</button>
+          <span style={{fontSize:12,fontWeight:600}}>{monthLabel}</span>
+          <button onClick={()=>setMonthOff(m=>m+1)} style={{...S.btnMicro,padding:"2px 8px"}}>&#x25B6;</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+          {DAYS.map(d=><div key={d} style={{fontSize:9,fontWeight:700,textAlign:"center",color:"#9B8E80"}}>{d.slice(0,2)}</div>)}
+          {cells.map((c,i)=>{
+            if(!c) return <div key={"e"+i}/>;
+            const isToday=c.iso===today;
+            return (
+              <div key={c.iso} onClick={()=>{if(c.active) toggleTrackerDay(trk.id,c.iso);}}
+                style={{width:"100%",aspectRatio:"1",borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:10,fontWeight:isToday?700:500,cursor:c.active?"pointer":"default",
+                  background:c.done?trk.color+"30":c.active?"#F8F3EC":"#EBE4D8",
+                  color:c.done?trk.color:c.active?"#4A3F30":"#C8BEB0",
+                  border:isToday?"2px solid "+trk.color:"1px solid transparent"}}>
+                {c.day}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  function TrackerRow({trk}){
+    const streak=trackerStreak(trk);
+    const todayDi=dayIndex(today);
+    const isActiveToday=trk.activeDays[todayDi];
+    const doneToday=trk.completions[today];
+    return (
+      <div onClick={()=>setSelId(trk.id)}
+        onContextMenu={e=>openCtx?.(e,[
+          {label:"Edit",action:()=>setEditId(trk.id)},
+          {label:"Archive",action:()=>archiveTracker(trk.id)},
+          {label:"Delete",action:()=>deleteTracker(trk.id),danger:true},
+        ])}
+        style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:9,cursor:"pointer",
+          background:sel?.id===trk.id?"#EBE4D8":"transparent",border:sel?.id===trk.id?"1px solid #D5CBBC":"1px solid transparent"}}>
+        <div style={{width:10,height:10,borderRadius:3,background:trk.color,flexShrink:0}}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:600,color:"#1C1714",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{trk.title}</div>
+          <div style={{fontSize:10,color:"#9B8E80"}}>{DAYS.filter((_,i)=>trk.activeDays[i]).map(d=>d.slice(0,3)).join(", ")}</div>
+        </div>
+        {isActiveToday&&(
+          <div onClick={e=>{e.stopPropagation();toggleTrackerDay(trk.id,today);}}
+            style={{width:20,height:20,borderRadius:5,border:"2px solid "+trk.color,
+              background:doneToday?trk.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",
+              color:"#fff",fontSize:11,fontWeight:700,flexShrink:0,cursor:"pointer"}}>
+            {doneToday?"\u2713":""}
+          </div>
+        )}
+        {streak>0&&<span style={{fontSize:10,fontWeight:600,color:trk.color,flexShrink:0}}>{streak}d</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{display:"flex",gap:24,height:"100%",minHeight:0}}>
+      {/* Left: Tracker list */}
+      <div style={{width:280,flexShrink:0,overflowY:"auto",paddingRight:8}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <h2 style={{fontFamily:'"Playfair Display",serif',fontSize:20,margin:0}}>Trackers</h2>
+          <button onClick={()=>setShowCreate(true)} style={{...S.btnDark,fontSize:12,padding:"6px 14px"}}>+ New</button>
+        </div>
+        {ungrouped.length>0&&(
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#9B8E80",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4,paddingLeft:4}}>General</div>
+            {ungrouped.map(t=><TrackerRow key={t.id} trk={t}/>)}
+          </div>
+        )}
+        {grouped.map(({sec,items})=>(
+          <div key={sec.id} style={{marginBottom:12}}>
+            <div style={{fontSize:10,fontWeight:700,color:sec.color,letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4,paddingLeft:4,display:"flex",alignItems:"center",gap:4}}>
+              <span style={{width:6,height:6,borderRadius:2,background:sec.color,display:"inline-block"}}/>{sec.label}
+            </div>
+            {items.map(t=><TrackerRow key={t.id} trk={t}/>)}
+          </div>
+        ))}
+        {active.length===0&&(
+          <div style={{textAlign:"center",padding:"40px 16px",color:"#9B8E80"}}>
+            <div style={{fontSize:28,marginBottom:8}}>&#x1F4CB;</div>
+            <div style={{fontSize:13,fontWeight:600}}>No trackers yet</div>
+            <div style={{fontSize:11,marginTop:4}}>Create one to start tracking habits</div>
+          </div>
+        )}
+      </div>
+      {/* Right: Selected tracker detail */}
+      <div style={{flex:1,overflowY:"auto"}}>
+        {sel?(
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+              <div style={{width:14,height:14,borderRadius:4,background:sel.color}}/>
+              <h2 style={{fontFamily:'"Playfair Display",serif',fontSize:22,margin:0}}>{sel.title}</h2>
+              {sel.sectionId&&byId[sel.sectionId]&&(
+                <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:4,background:byId[sel.sectionId].color+"20",color:byId[sel.sectionId].color}}>
+                  {byId[sel.sectionId].label}
+                </span>
+              )}
+              <div style={{flex:1}}/>
+              <button onClick={()=>setEditId(sel.id)} style={{...S.btnGhost,fontSize:11,padding:"4px 12px"}}>Edit</button>
+            </div>
+
+            {/* Pinned Tasks — active linked tasks (done tasks hidden) */}
+            <div style={{marginBottom:16}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                <span style={S.lbl}>Pinned Tasks</span>
+                <div style={{flex:1}}/>
+                <div ref={pinTaskRef} style={{position:"relative"}}>
+                  <button onClick={()=>{setShowPinTask(v=>!v);setShowPinNote(false);}} style={{...S.btnMicro,fontSize:10}}>+ Pin Existing</button>
+                  {showPinTask&&(
+                    <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,zIndex:300,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:9,padding:8,minWidth:250,maxHeight:220,overflowY:"auto",boxShadow:"0 4px 16px rgba(0,0,0,0.13)"}}>
+                      <input value={pinTaskQ} onChange={e=>setPinTaskQ(e.target.value)} placeholder="Search tasks to pin…"
+                        style={{...S.input,marginBottom:6,padding:"5px 8px",fontSize:11}} autoFocus/>
+                      {tasks.filter(t=>t.type!=="spacer"&&t.status!=="done"&&!sel.linkedTaskIds.includes(t.id)&&(!pinTaskQ||t.title.toLowerCase().includes(pinTaskQ.toLowerCase()))).slice(0,10).map(t=>(
+                        <div key={t.id} onClick={()=>{linkTrackerToTask(sel.id,t.id);setShowPinTask(false);setPinTaskQ("");}}
+                          style={{fontSize:12,padding:"5px 8px",borderRadius:6,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#EBE4D8"}
+                          onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <Dot color={byId[t.sectionId]?.color||"#9B8E80"} size={6}/>{t.title}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button onClick={()=>setShowAddTask(true)} style={{...S.btnMicro,fontSize:10}}>+ Create New</button>
+              </div>
+              {sel.linkedTaskIds.map(tid=>{
+                const t=tasks.find(x=>x.id===tid);
+                if(!t||t.status==="done") return null;
+                return (
+                  <div key={tid} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:7,background:"#F8F3EC",marginBottom:4,fontSize:12,border:"1px solid #E3D9CC"}}>
+                    <Dot color={byId[t.sectionId]?.color||"#9B8E80"} size={7}/>
+                    <span style={{flex:1,cursor:"pointer",color:"#4B3FC7",fontWeight:500}} onClick={()=>navigateToFresh?.({type:"task",id:tid})}>{t.title}</span>
+                    <button onClick={()=>unlinkTrackerFromTask(sel.id,tid)} title="Unpin"
+                      style={{background:"none",border:"none",color:"#C2B49E",cursor:"pointer",fontSize:11,padding:0}}>&#xd7;</button>
+                  </div>
+                );
+              })}
+              {sel.linkedTaskIds.filter(tid=>{const t=tasks.find(x=>x.id===tid);return t&&t.status!=="done";}).length===0&&(
+                <div style={{fontSize:11,color:"#C2B49E",padding:"4px 2px",fontStyle:"italic"}}>No pinned tasks</div>
+              )}
+            </div>
+
+            {/* Pinned Notes — linked notes for reference */}
+            <div style={{marginBottom:20}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                <span style={S.lbl}>Pinned Notes</span>
+                <div style={{flex:1}}/>
+                <div ref={pinNoteRef} style={{position:"relative"}}>
+                  <button onClick={()=>{setShowPinNote(v=>!v);setShowPinTask(false);}} style={{...S.btnMicro,fontSize:10}}>+ Pin Existing</button>
+                  {showPinNote&&(
+                    <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,zIndex:300,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:9,padding:8,minWidth:250,maxHeight:220,overflowY:"auto",boxShadow:"0 4px 16px rgba(0,0,0,0.13)"}}>
+                      <input value={pinNoteQ} onChange={e=>setPinNoteQ(e.target.value)} placeholder="Search notes to pin…"
+                        style={{...S.input,marginBottom:6,padding:"5px 8px",fontSize:11}} autoFocus/>
+                      {Object.entries(notes||{}).flatMap(function(entry){
+                        const sid=entry[0]; const arr=entry[1];
+                        return (Array.isArray(arr)?arr:[]).filter(function(n){
+                          return !sel.linkedNoteIds.includes(n.id)&&(!pinNoteQ||n.title.toLowerCase().includes(pinNoteQ.toLowerCase()));
+                        }).map(function(n){ return {note:n,sid:sid}; });
+                      }).slice(0,10).map(function(item){
+                        return (
+                          <div key={item.note.id} onClick={function(){linkTrackerToNote(sel.id,item.note.id,item.sid);setShowPinNote(false);setPinNoteQ("");}}
+                            style={{fontSize:12,padding:"5px 8px",borderRadius:6,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+                            onMouseEnter={function(e){e.currentTarget.style.background="#EBE4D8";}}
+                            onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                            <Dot color={byId[item.sid]?.color||"#9B8E80"} size={6}/>{item.note.title}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <button onClick={function(){
+                  const secForNote=sel.sectionId||sections.filter(function(s){return s.id!=="overhead";})[0]?.id;
+                  if(!secForNote) return;
+                  const noteId=uid();
+                  addNote(secForNote,null,{id:noteId,title:sel.title+" — Log",linkedTrackerIds:[sel.id]});
+                  updateTracker(sel.id,{linkedNoteIds:[...(sel.linkedNoteIds||[]),noteId]});
+                }} style={{...S.btnMicro,fontSize:10}}>+ Create New</button>
+              </div>
+              {sel.linkedNoteIds.map(nid=>{
+                let found=null; let foundSec=null;
+                for(const [sid,arr] of Object.entries(notes||{})) {
+                  const n=(Array.isArray(arr)?arr:[]).find(n=>n.id===nid);
+                  if(n){ found=n; foundSec=sid; break; }
+                }
+                if(!found) return null;
+                return (
+                  <div key={nid} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:7,background:"#F8F3EC",marginBottom:4,fontSize:12,border:"1px solid #E3D9CC"}}>
+                    <Dot color={byId[foundSec]?.color||"#9B8E80"} size={7}/>
+                    <span style={{flex:1,cursor:"pointer",color:"#6B3FC7",fontWeight:500}} onClick={()=>navigateToFresh?.({type:"note",id:nid})}>{found.title}</span>
+                    <button onClick={()=>unlinkTrackerFromNote(sel.id,nid,foundSec)} title="Unpin"
+                      style={{background:"none",border:"none",color:"#C2B49E",cursor:"pointer",fontSize:11,padding:0}}>&#xd7;</button>
+                  </div>
+                );
+              })}
+              {sel.linkedNoteIds.filter(nid=>{
+                for(const arr of Object.values(notes||{})){const n=(Array.isArray(arr)?arr:[]).find(n=>n.id===nid);if(n)return true;}return false;
+              }).length===0&&(
+                <div style={{fontSize:11,color:"#C2B49E",padding:"4px 2px",fontStyle:"italic"}}>No pinned notes</div>
+              )}
+            </div>
+
+            {/* This week row */}
+            <div style={{marginBottom:20}}>
+              <div style={S.lbl}>This Week</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
+                {DAYS.map((d,i)=>{
+                  const wk=mondayOf(new Date());
+                  const iso=addDays(wk,i);
+                  const isActive=sel.activeDays[i];
+                  const done=sel.completions[iso];
+                  const isToday=iso===today;
+                  return (
+                    <div key={d} onClick={()=>{if(isActive) toggleTrackerDay(sel.id,iso);}}
+                      style={{padding:"8px 4px",borderRadius:8,textAlign:"center",cursor:isActive?"pointer":"default",
+                        background:done?sel.color+"20":isActive?"#F8F3EC":"#EBE4D8",
+                        border:isToday?"2px solid "+sel.color:"1.5px solid "+(isActive?"#E3D9CC":"#EBE4D8")}}>
+                      <div style={{fontSize:10,fontWeight:700,color:isToday?sel.color:"#9B8E80"}}>{d.slice(0,3)}</div>
+                      <div style={{fontSize:18,marginTop:2,color:done?sel.color:isActive?"#C8BEB0":"#E3D9CC",fontWeight:700}}>
+                        {done?"\u2713":isActive?"\u00B7":""}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Streak & stats */}
+            <div style={{display:"flex",gap:12,marginBottom:20}}>
+              {[
+                [trackerStreak(sel),"Current Streak","scheduled days"],
+                [Object.keys(sel.completions).length,"Total Completions","all time"],
+              ].map(([v,l,sub],i)=>(
+                <div key={i} style={{flex:1,background:"#EBE4D8",borderRadius:10,padding:"12px 14px"}}>
+                  <div style={{fontSize:22,fontWeight:700,fontFamily:'"Playfair Display",serif',color:sel.color}}>{v}</div>
+                  <div style={{fontSize:11,fontWeight:600,color:"#4A3F30"}}>{l}</div>
+                  <div style={{fontSize:9,color:"#9B8E80"}}>{sub}</div>
+                </div>
+              ))}
+            </div>
+            {/* Month grid */}
+            <div style={{marginBottom:20,background:"#EBE4D8",borderRadius:12,padding:"14px 16px"}}>
+              <MonthGrid trk={sel}/>
+            </div>
+          </div>
+        ):(
+          <div style={{textAlign:"center",padding:"80px 20px",color:"#9B8E80"}}>
+            <div style={{fontSize:13}}>Select a tracker or create a new one</div>
+          </div>
+        )}
+      </div>
+      {/* Create/Edit modal */}
+      {(showCreate||editId)&&<TrackerCreateModal sections={sections} tracker={editId?trackers.find(t=>t.id===editId):null}
+        onSave={(data)=>{
+          if(editId) updateTracker(editId,data);
+          else addTracker(data.title,data);
+          setShowCreate(false); setEditId(null);
+        }}
+        onClose={()=>{setShowCreate(false);setEditId(null);}}/>}
+      {/* Add Task modal for tracker */}
+      {showAddTask&&sel&&(
+        <AddTaskModal secColor={sel.color} onClose={()=>setShowAddTask(false)}
+          onAdd={(title,notesT,opts)=>{
+            const secForTask=sel.sectionId||sections.filter(s=>s.id!=="overhead")[0]?.id;
+            if(!secForTask) return;
+            const taskId=uid();
+            addTask(secForTask,title,notesT,{...opts,id:taskId});
+            linkTrackerToTask(sel.id,taskId);
+            setShowAddTask(false);
+          }}
+          initialTitle={sel.title}/>
+      )}
+    </div>
+  );
+}
+
+function TrackerCreateModal({sections,tracker,onSave,onClose}) {
+  const [title,setTitle]=useState(tracker?.title||"");
+  const [secId,setSecId]=useState(tracker?.sectionId||"");
+  const [color,setColor]=useState(tracker?.color||"#0C7B7B");
+  const [days,setDays]=useState(tracker?.activeDays||[1,1,1,1,1,0,0]);
+  const titleRef=useRef(null);
+  useEffect(()=>{setTimeout(()=>titleRef.current?.focus(),60);},[]);
+
+  function toggleDay(i){ setDays(d=>{const n=[...d];n[i]=n[i]?0:1;return n;}); }
+
+  function handleSave(){
+    if(!title.trim()) return;
+    onSave({title:title.trim(),sectionId:secId||null,color,activeDays:days});
+  }
+
+  return (
+    <Overlay onClose={onClose} width={420}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+        <Dot color={color} size={11}/>
+        <h2 style={{fontFamily:'"Playfair Display",serif',fontSize:18,fontWeight:700}}>{tracker?"Edit Tracker":"New Tracker"}</h2>
+      </div>
+      <div style={{marginBottom:12}}>
+        <label style={S.lbl}>Title</label>
+        <input ref={titleRef} value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==="Enter") handleSave();}}
+          placeholder="e.g. Exercise, Reading, Meditation..."
+          style={{...S.input,marginBottom:0}}/>
+      </div>
+      <div style={{marginBottom:12}}>
+        <label style={S.lbl}>Section (optional)</label>
+        <select value={secId} onChange={e=>setSecId(e.target.value)} style={{...S.input,marginBottom:0}}>
+          <option value="">None (Independent)</option>
+          {sections.filter(s=>s.id!=="overhead").map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+      </div>
+      <div style={{marginBottom:12}}>
+        <label style={S.lbl}>Active Days</label>
+        <div style={{display:"flex",gap:4}}>
+          {DAYS.map((d,i)=>(
+            <button key={d} onClick={()=>toggleDay(i)}
+              style={{...S.btnMicro,flex:1,padding:"6px 0",background:days[i]?color:"#EBE4D8",
+                color:days[i]?"#fff":"#4A3F30",borderRadius:6,fontSize:11,fontWeight:600}}>
+              {d.slice(0,2)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{marginBottom:16}}>
+        <ColorPicker value={color} onChange={setColor} label="Colour"/>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={handleSave} style={{...S.btnDark,background:color,flex:1}}>{tracker?"Save":"Create Tracker"}</button>
+        <button onClick={onClose} style={S.btnGhost}>Cancel</button>
+      </div>
+    </Overlay>
+  );
+}
+
 // ─── Stats View ───────────────────────────────────────────────────────────────
 
-function StatsView({tasks,tt,week,sections,byId,notes}) {
+function StatsView({tasks,tt,week,sections,byId,notes,trackers}) {
   const [archivedTtCount,setArchivedTtCount]=React.useState(0);
   React.useEffect(()=>{
     sget("py-tt-archive").then(arch=>{
@@ -3808,13 +4415,52 @@ function StatsView({tasks,tt,week,sections,byId,notes}) {
           </div>
         );
       })()}
+
+      {/* Tracker Consistency */}
+      {(()=>{
+        const activeTrackers=(trackers||[]).filter(t=>!t.archived);
+        if(activeTrackers.length===0) return null;
+        const thisWeekDates=DAYS.map(function(_,i){ return addDays(week,i); });
+        const trkStats=activeTrackers.map(function(trk){
+          const expected=thisWeekDates.filter(function(_,i){ return trk.activeDays[i]; }).length;
+          const completed=thisWeekDates.filter(function(d,i){ return trk.activeDays[i]&&trk.completions[d]; }).length;
+          const rate=expected>0?Math.round(completed/expected*100):0;
+          const streak=trackerStreak(trk);
+          return{trk:trk,expected:expected,completed:completed,rate:rate,streak:streak};
+        });
+        return (
+          <div style={{marginTop:20,background:"#EBE4D8",borderRadius:14,padding:"20px 22px"}}>
+            <div style={{fontWeight:700,fontSize:13,color:"#4A3F30",marginBottom:16}}>&#x1F4CA; Tracker Consistency</div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {trkStats.map(function(s){
+                return (
+                  <div key={s.trk.id} style={{background:"#FDFAF6",borderRadius:10,padding:"12px 14px",border:"1px solid #E3D9CC"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                      <span style={{width:10,height:10,borderRadius:3,background:s.trk.color}}/>
+                      <span style={{fontSize:13,fontWeight:600,flex:1}}>{s.trk.title}</span>
+                      <span style={{fontSize:11,fontWeight:700,color:s.rate>=80?"#1A7A43":s.rate>=50?"#B05A12":"#C43A3A"}}>{s.rate}%</span>
+                    </div>
+                    <div style={{height:6,borderRadius:3,background:"#E3D9CC",overflow:"hidden"}}>
+                      <div style={{height:"100%",borderRadius:3,background:s.trk.color,width:s.rate+"%",transition:"width 0.3s"}}/>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+                      <span style={{fontSize:10,color:"#9B8E80"}}>{s.completed}/{s.expected} this week</span>
+                      {s.streak>0&&<span style={{fontSize:10,fontWeight:600,color:s.trk.color}}>{s.streak}d streak</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
 
 // ─── Settings Modal ───────────────────────────────────────────────────────────
 
-function SettingsModal({sections,setSections,onClose,checkForUpdate,tasks,setTasks,notes,setNotes,tt,setTt}) {
+function SettingsModal({sections,setSections,onClose,checkForUpdate,tasks,setTasks,notes,setNotes,tt,setTt,trackers,setTrackers}) {
   const [tab,        setTab]      = useState("sections");
   const [local,      setLocal]    = useState(sections.map(s=>({...s})));
   const [newLabel,   setNewLabel] = useState("");
@@ -3858,6 +4504,7 @@ function SettingsModal({sections,setSections,onClose,checkForUpdate,tasks,setTas
       // Delete all child items
       setTasks(prev=>prev.filter(t=>t.sectionId!==sid));
       setNotes(prev=>{ const next={...prev}; delete next[sid]; return next; });
+      setTrackers(prev=>prev.filter(t=>t.sectionId!==sid));
       setTt(prev=>{
         const next={};
         for (const [wk,week] of Object.entries(prev)) {
@@ -3893,6 +4540,8 @@ function SettingsModal({sections,setSections,onClose,checkForUpdate,tasks,setTas
         }
         return next;
       });
+      // Move trackers to target section
+      setTrackers(prev=>prev.map(t=>t.sectionId===sid?{...t,sectionId:targetSecId}:t));
     }
     // Remove from local sections list
     setLocal(l=>l.filter(s=>s.id!==sid));
@@ -4361,10 +5010,10 @@ function Empty({icon,text,sub}) {
     </div>
   );
 }
-function Overlay({onClose,children,width=420}) {
+function Overlay({onClose,children,width=420,maxHeight="88vh"}) {
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(28,23,20,0.68)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:20}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"#FDFAF6",borderRadius:14,padding:"26px 28px",width,maxWidth:"100%",maxHeight:"88vh",overflowY:"auto",boxShadow:"0 28px 72px rgba(0,0,0,0.42)",border:"1px solid #E3D9CC"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#FDFAF6",borderRadius:14,padding:"26px 28px",width,maxWidth:"100%",maxHeight,overflowY:"auto",boxShadow:"0 28px 72px rgba(0,0,0,0.42)",border:"1px solid #E3D9CC"}}>
         {children}
       </div>
     </div>
@@ -4374,7 +5023,7 @@ function Overlay({onClose,children,width=420}) {
 
 // ─── Pin Overlay ──────────────────────────────────────────────────────────────
 
-function PinOverlay({tasks,tt,week,sections,byId,onClose,navigateTo,navigateToDate,navigateToFresh}) {
+function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClose,navigateTo,navigateToDate,navigateToFresh}) {
   const [pos,  setPos]  = useState({x:null,y:null}); // null = anchored bottom-right
   const [dragging,setDragging]=useState(false);
   const dragRef=React.useRef(null);
@@ -4405,6 +5054,9 @@ function PinOverlay({tasks,tt,week,sections,byId,onClose,navigateTo,navigateToDa
   const blocks=[...((tt[week]||{})[dayName]||[])].sort((a,b)=>a.start.localeCompare(b.start));
   const todaySids=[...new Set(blocks.filter(b=>b.sectionId&&byId[b.sectionId]).map(b=>b.sectionId))];
   const activeTasks=tasks.filter(t=>t.status!=="done"&&t.type!=="spacer"&&todaySids.includes(t.sectionId));
+  const pinTodayDi=dayIndex(todayISO());
+  const pinTrackers=(trackers||[]).filter(t=>!t.archived&&t.activeDays[pinTodayDi]);
+  const pinToday=todayISO();
 
   const now=new Date();
   const nowM=now.getHours()*60+now.getMinutes();
@@ -4509,9 +5161,28 @@ function PinOverlay({tasks,tt,week,sections,byId,onClose,navigateTo,navigateToDa
           </div>
         )}
 
-        {blocks.length===0&&activeTasks.length===0&&(
+        {/* Today's Trackers */}
+        {pinTrackers.length>0&&(
+          <div style={{padding:"8px 12px 10px"}}>
+            <div style={{fontSize:9,fontWeight:700,color:"#4A3F30",letterSpacing:"0.6px",textTransform:"uppercase",marginBottom:5}}>Trackers</div>
+            <div style={{display:"flex",flexDirection:"column",gap:3}}>
+              {pinTrackers.map(trk=>{
+                const done=trk.completions[pinToday];
+                return (
+                  <div key={trk.id} onClick={()=>toggleTrackerDay?.(trk.id,pinToday)}
+                    style={{display:"flex",alignItems:"center",gap:6,padding:"4px 7px",borderRadius:4,
+                      background:done?"#1A3A2A":"#2C2420",borderLeft:"2px solid "+trk.color,cursor:"pointer"}}>
+                    <span style={{fontSize:11,flex:1,color:done?"#9AD4B5":"#EBE4D8"}}>{done?"\u2713 ":""}{trk.title}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {blocks.length===0&&activeTasks.length===0&&pinTrackers.length===0&&(
           <div style={{padding:"20px 12px",textAlign:"center",color:"#4A3F30",fontSize:11}}>
-            No blocks or tasks today.
+            No blocks, tasks, or trackers today.
           </div>
         )}
       </div>

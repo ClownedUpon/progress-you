@@ -2768,7 +2768,7 @@ dependencies = [
 
 [[package]]
 name = "progress-you"
-version = "2.0.2"
+version = "2.2.0"
 dependencies = [
  "serde",
  "serde_json",

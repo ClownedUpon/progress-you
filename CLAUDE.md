@@ -64,7 +64,7 @@ These constraints are non-negotiable. Violating them will break the app at compi
 `index.html` uses a resilient async loader: tries `./vendor/*.min.js` first (offline), falls back to CDN (dev mode only), shows a visible error if both fail. The app source is in a `<script id="app-source" type="text/plain">` tag, manually compiled via `Babel.transform()` with presets `['env', 'react']`.
 
 ## Current Version
-2.0.2
+2.2.0
 
 ## Release Process
 ```
