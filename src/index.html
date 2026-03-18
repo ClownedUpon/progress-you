@@ -139,6 +139,13 @@ function blockMins(blk) {
   const [eh,em]=blk.end.split(":").map(Number);
   return Math.max(0,(eh*60+em)-(sh*60+sm));
 }
+function weekDayToISO(wk,dayName) {
+  const di=DAYS.indexOf(dayName); if(di<0) return wk;
+  const [y,m,d]=wk.split("-").map(Number);
+  const dt=new Date(y,m-1,d+di,12,0,0);
+  return dt.toISOString().slice(0,10);
+}
+function stripHtmlText(html) { return (html||"").replace(/<[^>]*>/g,"").trim(); }
 function todayName()   { return new Date().toLocaleDateString("en-GB",{weekday:"long"}); }
 function nowStamp()    { return new Date().toISOString().slice(0,16).replace("T","_").replace(":","-"); }
 function todayISO()    { return new Date().toISOString().slice(0,10); }
@@ -299,6 +306,7 @@ function migrateTasks(tasks) {
     allDay:        t.allDay        ?? true,
     remindAt:      t.remindAt      ?? null,
     remindFired:   t.remindFired   ?? false,
+    archived:      t.archived      ?? false,
     ...t,
   }));
 }
@@ -415,6 +423,9 @@ function App() {
   const [lastNoteKey,  setLastNoteKey]  = useState({sec:null,id:null});
   const [templates,    setTemplates]    = useState([]);
   const [setBlocks,    setSetBlocks]    = useState([]);
+  const [showSearch,   setShowSearch]   = useState(false);
+  const [undoStack,    setUndoStack]    = useState([]);
+  const undoTimers = useRef({});
 
   useEffect(()=>{
     const isDev=!!window.location.port;
@@ -444,6 +455,27 @@ function App() {
   useEffect(()=>{ if(ready) ssetDebounced("py-tt",tt); },[tt,ready]);
   useEffect(()=>{ if(ready) ssetDebounced("py-tasks",tasks); },[tasks,ready]);
   useEffect(()=>{ if(ready) ssetDebounced("py-notes",notes); },[notes,ready]);
+
+  // ── Undo system — tracks last 5 destructive actions
+  function pushUndo(title,detail,undoFn){
+    const id=uid();
+    setUndoStack(prev=>[{id,title,detail,undoFn},...prev].slice(0,5));
+    undoTimers.current[id]=setTimeout(()=>{
+      setUndoStack(prev=>prev.filter(u=>u.id!==id));
+      delete undoTimers.current[id];
+    },5000);
+  }
+  function executeUndo(id){
+    setUndoStack(prev=>{
+      const entry=prev.find(u=>u.id===id);
+      if(entry){ entry.undoFn(); clearTimeout(undoTimers.current[id]); delete undoTimers.current[id]; }
+      return prev.filter(u=>u.id!==id);
+    });
+  }
+  function dismissUndo(id){
+    clearTimeout(undoTimers.current[id]); delete undoTimers.current[id];
+    setUndoStack(prev=>prev.filter(u=>u.id!==id));
+  }
 
   // ── Reminder engine — polls every 30s
   const [toasts, setToasts] = useState([]); // in-app fallback banners
@@ -490,6 +522,7 @@ function App() {
   useEffect(()=>{
     const handler = e => {
       if((e.ctrlKey||e.metaKey) && e.code==="Space") { e.preventDefault(); setShowCap(true); }
+      if((e.ctrlKey||e.metaKey) && e.key==="k") { e.preventDefault(); setShowSearch(true); }
       if(e.key==="F3"||e.key==="F7") { e.preventDefault(); }
     };
     window.addEventListener("keydown",handler);
@@ -511,7 +544,13 @@ function App() {
     });
   }
   function deleteBlock(day,id){
-    setTt(prev=>{const w={...(prev[week]||{})};return{...prev,[week]:{...w,[day]:(w[day]||[]).filter(b=>b.id!==id)}};});
+    const blocks=(tt[week]||{})[day]||[];
+    const block=blocks.find(b=>b.id===id);
+    const capturedWeek=week;
+    setTt(prev=>{const w={...(prev[capturedWeek]||{})};return{...prev,[capturedWeek]:{...w,[day]:(w[day]||[]).filter(b=>b.id!==id)}};});
+    if(block) pushUndo("Block deleted",block.label||"Block",()=>{
+      setTt(prev=>{const w={...(prev[capturedWeek]||{})};return{...prev,[capturedWeek]:{...w,[day]:[...(w[day]||[]),block]}};});
+    });
   }
   function copyPrevWeek(){
     const prev=shiftWeek(week,-1);
@@ -574,8 +613,32 @@ function App() {
     });
   }
   function updateTask(id,upd){ setTasks(p=>p.map(t=>t.id===id?{...t,...upd}:t)); }
-  function deleteTask(id)    { setTasks(p=>p.filter(t=>t.id!==id)); }
-  function completeTask(id)  { const now=Date.now(); updateTask(id,{status:"done",completedAt:now,monthCompleted:monthKeyOf(now)}); }
+  function deleteTask(id){
+    const task=tasks.find(t=>t.id===id);
+    setTasks(p=>p.filter(t=>t.id!==id));
+    if(task&&task.type!=="spacer") pushUndo("Task deleted",task.title,()=>setTasks(prev=>[task,...prev]));
+  }
+  function completeTask(id){
+    const task=tasks.find(t=>t.id===id);
+    const now=Date.now();
+    const prev=task?{status:task.status,completedAt:task.completedAt,monthCompleted:task.monthCompleted}:null;
+    updateTask(id,{status:"done",completedAt:now,monthCompleted:monthKeyOf(now)});
+    if(task) pushUndo("Task completed",task.title,()=>updateTask(id,prev));
+  }
+  function archiveTask(id){
+    const task=tasks.find(t=>t.id===id);
+    updateTask(id,{archived:true});
+    if(task) pushUndo("Task archived",task.title,()=>updateTask(id,{archived:false}));
+  }
+  function archiveDoneTasks(secId){
+    const toArchive=tasks.filter(t=>t.sectionId===secId&&t.status==="done"&&!t.archived&&t.type!=="spacer");
+    if(toArchive.length===0) return;
+    const ids=toArchive.map(t=>t.id);
+    setTasks(p=>p.map(t=>ids.includes(t.id)?{...t,archived:true}:t));
+    pushUndo("Archived "+toArchive.length+" tasks",byId[secId]?.label||"section",()=>{
+      setTasks(p=>p.map(t=>ids.includes(t.id)?{...t,archived:false}:t));
+    });
+  }
   function moveTask(dragId,beforeId,newStatus){
     setTasks(prev=>{
       const dragged=prev.find(t=>t.id===dragId); if(!dragged) return prev;
@@ -605,10 +668,13 @@ function App() {
     setNotes(prev=>({...prev,[sid]:(prev[sid]||[]).map(n=>n.id===noteId?{...n,...upd}:n)}));
   }
   function deleteNote(sid,noteId){
-    setNotes(prev=>{
-      const items=prev[sid]||[];
-      const toRemove=new Set([noteId,...noteDescendants(items,noteId)]);
-      return{...prev,[sid]:items.filter(n=>!toRemove.has(n.id))};
+    const items=notes[sid]||[];
+    const toRemove=new Set([noteId,...noteDescendants(items,noteId)]);
+    const removed=items.filter(n=>toRemove.has(n.id));
+    const mainNote=removed.find(n=>n.id===noteId);
+    setNotes(prev=>({...prev,[sid]:(prev[sid]||[]).filter(n=>!toRemove.has(n.id))}));
+    if(removed.length>0) pushUndo("Note deleted",mainNote?.title||"Untitled",()=>{
+      setNotes(prev=>({...prev,[sid]:[...(prev[sid]||[]),...removed]}));
     });
   }
 
@@ -710,7 +776,7 @@ function App() {
 
   if(!ready) return <div style={{minHeight:"100vh",background:"#F8F3EC",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:'"DM Sans",sans-serif',color:"#9B8E80"}}>Loading…</div>;
 
-  const tp={sections,byId,tasks,addTask,updateTask,deleteTask,completeTask,moveTask};
+  const tp={sections,byId,tasks,addTask,updateTask,deleteTask,completeTask,moveTask,archiveTask,archiveDoneTasks};
 
   return (
     <NavCtx.Provider value={{navigateTo,navigateToFresh,navigateBack,navigateToDate,navStack,navigateToIndex:i=>setNavStack(s=>s.slice(0,i+1)),setView,getDayBlocks,upsertBlock,sections}}>
@@ -810,6 +876,7 @@ function App() {
         )}
 
         <div style={{display:"flex",gap:6,marginLeft:view==="timetable"?8:"auto",alignItems:"center"}}>
+          <button onClick={()=>setShowSearch(true)} title="Search (Ctrl+K)" style={{padding:"6px 12px",borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600}}>&#x1F50D; Search</button>
           <button onClick={()=>setShowPin(v=>!v)} title={showPin?"Unpin dashboard":"Pin dashboard"} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #3A302A",background:showPin?"#3A302A":"transparent",color:showPin?"#C8A86B":"#7A6C5E",fontSize:11,fontWeight:600}}>&#x1F4CC; {showPin?"Unpin":"Pin"}</button>
           <button onClick={()=>setShowIO(true)} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600}}>&#x21C5; Data</button>
           <button onClick={()=>setShowSett(true)} style={{width:34,height:34,borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>⚙</button>
@@ -819,17 +886,18 @@ function App() {
       <main style={{padding:"24px 28px",maxWidth:1500,margin:"0 auto"}}>
         {view==="today"     && <TodayView     {...tp} getDayBlocks={getDayBlocks} onOpenCapture={()=>setShowCap(true)}/>}
         {view==="timetable" && <TimetableView sections={sections} byId={byId} getDayBlocks={getDayBlocks} upsertBlock={upsertBlock} deleteBlock={deleteBlock} templates={templates} addTemplate={addTemplate} updateTemplate={updateTemplate} deleteTemplate={deleteTemplate} applyTemplate={applyTemplate} tasks={tasks} notes={notes} setBlocks={setBlocks} addSetBlock={addSetBlock} removeSetBlock={removeSetBlock}/>}
-        {view==="boards"    && <BoardsView    {...tp} notes={notes} setView={setView} initialSecId={lastBoardSec} onSecChange={setLastBoardSec}/>}
+        {view==="boards"    && <BoardsView    {...tp} notes={notes} setView={setView} initialSecId={lastBoardSec} onSecChange={setLastBoardSec} archiveTask={archiveTask} archiveDoneTasks={archiveDoneTasks}/>}
         {view==="notes"     && <NotesView     sections={sections} byId={byId} getSectionNotes={getSectionNotes} addNote={addNote} updateNoteField={updateNoteField} deleteNote={deleteNote} tasks={tasks} setView={setView} initialSecId={lastNoteKey.sec} initialNoteId={lastNoteKey.id} onNoteChange={(sec,id)=>setLastNoteKey({sec,id})}/>}
         {view==="monthly"   && <MonthlyView   tasks={tasks} sections={sections} byId={byId} initialMode="log"/>}
         {view==="calendar"   && <MonthlyView   tasks={tasks} sections={sections} byId={byId} initialMode="calendar"/>}
-        {view==="stats"     && <StatsView     tasks={tasks} tt={tt} week={week} sections={sections} byId={byId}/>}
+        {view==="stats"     && <StatsView     tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} notes={notes}/>}
       </main>
 
       {showSett && <SettingsModal sections={sections} setSections={setSections} onClose={()=>setShowSett(false)} checkForUpdate={checkForUpdate}
         tasks={tasks} setTasks={setTasks} notes={notes} setNotes={setNotes} tt={tt} setTt={setTt}/>}
       {showIO   && <ImportExportModal onExport={exportData} onImport={importData} onClose={()=>setShowIO(false)} sections={sections}/>}
       {showCap  && <QuickCaptureModal sections={sections} byId={byId} addTask={addTask} addNote={addNote} onClose={()=>setShowCap(false)}/>}
+      {showSearch && <SearchModal tasks={tasks} notes={notes} sections={sections} byId={byId} tt={tt} onClose={()=>setShowSearch(false)}/>}
       <AppDialog dialog={dialog} onClose={dialog?.onClose}/>
       {showUpdate && updateInfo && (
         <UpdateDialog
@@ -838,7 +906,7 @@ function App() {
           onRemind={()=>setShowUpdate(false)}
         />
       )}
-      {/* Reminder toast banners */}
+      {/* Toast banners (reminders + undo) */}
       <div style={{position:"fixed",bottom:20,right:20,zIndex:500,display:"flex",flexDirection:"column",gap:8,pointerEvents:"none"}}>
         {toasts.map(t=>(
           <div key={t.id} style={{background:"#1C1714",color:"#F8F3EC",borderRadius:10,padding:"12px 18px",
@@ -846,6 +914,18 @@ function App() {
             animation:"slideIn 0.2s ease"}}>
             <div style={{fontSize:11,fontWeight:700,color:"#C8A86B",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:3}}>{t.title}</div>
             <div style={{fontSize:13}}>{t.body}</div>
+          </div>
+        ))}
+        {undoStack.map(u=>(
+          <div key={u.id} style={{background:"#1C1714",color:"#F8F3EC",borderRadius:10,padding:"12px 18px",
+            boxShadow:"0 8px 24px rgba(0,0,0,0.35)",minWidth:260,maxWidth:340,pointerEvents:"auto",
+            animation:"slideIn 0.2s ease",borderLeft:"3px solid #C8A86B"}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#C8A86B",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:3}}>{u.title}</div>
+            <div style={{fontSize:12,marginBottom:8,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.detail}</div>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>executeUndo(u.id)} style={{padding:"4px 12px",borderRadius:6,border:"1px solid #C8A86B",background:"transparent",color:"#C8A86B",fontSize:11,fontWeight:700,cursor:"pointer"}}>Undo</button>
+              <button onClick={()=>dismissUndo(u.id)} style={{padding:"4px 10px",borderRadius:6,border:"none",background:"transparent",color:"#5A4E46",fontSize:11,cursor:"pointer"}}>Dismiss</button>
+            </div>
           </div>
         ))}
       </div>
@@ -1221,6 +1301,173 @@ function QuickCaptureModal({sections,byId,addTask,addNote,onClose}) {
             <button onClick={onClose} style={S.btnGhost}>Cancel</button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Search Modal ─────────────────────────────────────────────────────────────
+
+function SearchModal({tasks,notes,sections,byId,tt,onClose}) {
+  const {navigateToFresh,navigateToDate}=React.useContext(NavCtx)||{};
+  const [query,setQuery]=useState("");
+  const [selIdx,setSelIdx]=useState(0);
+  const inputRef=useRef(null);
+
+  useEffect(()=>{ setTimeout(()=>inputRef.current?.focus(),50); },[]);
+  useEffect(()=>{
+    const handler=e=>{ if(e.key==="Escape") onClose(); };
+    window.addEventListener("keydown",handler);
+    return()=>window.removeEventListener("keydown",handler);
+  },[]);
+
+  const q=query.trim().toLowerCase();
+
+  // Search tasks
+  const taskResults=q?tasks.filter(t=>
+    t.type!=="spacer"&&(
+      (t.title||"").toLowerCase().includes(q)||
+      (t.notes||"").toLowerCase().includes(q)
+    )
+  ).slice(0,12).map(t=>({
+    kind:"task",id:t.id,title:t.title,
+    section:byId[t.sectionId],
+    detail:t.notes?t.notes.slice(0,80):null,
+    status:t.status,archived:t.archived,
+  })):[];
+
+  // Search notes
+  const allNotes=Object.entries(notes||{}).flatMap(function(entry){
+    const sid=entry[0]; const arr=entry[1];
+    return (Array.isArray(arr)?arr:[]).map(function(n){ return Object.assign({},n,{_sid:sid}); });
+  });
+  const noteResults=q?allNotes.filter(n=>
+    (n.title||"").toLowerCase().includes(q)||
+    stripHtmlText(n.content).toLowerCase().includes(q)
+  ).slice(0,12).map(n=>({
+    kind:"note",id:n.id,title:n.title,
+    section:byId[n._sid],
+    detail:stripHtmlText(n.content).slice(0,80)||null,
+  })):[];
+
+  // Search blocks
+  const blockResults=[];
+  if(q){
+    const entries=Object.entries(tt||{});
+    for(let wi=0;wi<entries.length;wi++){
+      const wk=entries[wi][0]; const weekData=entries[wi][1];
+      const dayEntries=Object.entries(weekData||{});
+      for(let di=0;di<dayEntries.length;di++){
+        const day=dayEntries[di][0]; const arr=dayEntries[di][1];
+        for(let bi=0;bi<(arr||[]).length;bi++){
+          const blk=arr[bi];
+          const sec=blk.sectionId?byId[blk.sectionId]:null;
+          const blkLabel=blk.label||(sec?sec.label:"")||"";
+          if(blkLabel.toLowerCase().includes(q)){
+            blockResults.push({
+              kind:"block",id:blk.id,
+              title:blkLabel||"Block",
+              section:sec,
+              detail:day+" "+blk.start+"--"+blk.end+" ("+weekLabel(wk)+")",
+              week:wk,day:day,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  const results=[...taskResults,...noteResults,...blockResults.slice(0,8)];
+  useEffect(()=>{ setSelIdx(0); },[query]);
+
+  function handleClick(r){
+    if(r.kind==="task") navigateToFresh?.({type:"task",id:r.id});
+    else if(r.kind==="note") navigateToFresh?.({type:"note",id:r.id});
+    else if(r.kind==="block"&&r.week&&r.day) navigateToDate?.(weekDayToISO(r.week,r.day));
+    onClose();
+  }
+
+  function handleKeyDown(e){
+    if(e.key==="ArrowDown"){ e.preventDefault(); setSelIdx(i=>Math.min(i+1,results.length-1)); }
+    if(e.key==="ArrowUp"){ e.preventDefault(); setSelIdx(i=>Math.max(i-1,0)); }
+    if(e.key==="Enter"&&results[selIdx]){ e.preventDefault(); handleClick(results[selIdx]); }
+  }
+
+  const TYPE_ICON={task:"&#x1F4CB;",note:"&#x1F4DD;",block:"&#x1F4C5;"};
+  const TYPE_LABEL={task:"Task",note:"Note",block:"Block"};
+  const TYPE_COLOR={task:"#4B3FC7",note:"#6B3FC7",block:"#2A6FAD"};
+
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(28,23,20,0.72)",display:"flex",alignItems:"flex-start",justifyContent:"center",zIndex:300,padding:"80px 20px 20px"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#FDFAF6",borderRadius:16,width:"100%",maxWidth:580,boxShadow:"0 32px 80px rgba(0,0,0,0.48)",border:"1px solid #E3D9CC",overflow:"hidden",maxHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column"}}>
+
+        {/* Search input */}
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 18px",borderBottom:"1px solid #EBE4D8"}}>
+          <span style={{fontSize:18,flexShrink:0}}>&#x1F50D;</span>
+          <input ref={inputRef} value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={handleKeyDown}
+            placeholder="Search tasks, notes, blocks..."
+            style={{flex:1,border:"none",background:"transparent",fontSize:15,fontWeight:500,fontFamily:'"DM Sans",sans-serif',color:"#1C1714",outline:"none"}}/>
+          <span style={{fontSize:10,color:"#9B8E80",flexShrink:0,background:"#EBE4D8",padding:"2px 8px",borderRadius:4,fontWeight:600}}>Ctrl+K</span>
+          <button onClick={onClose} style={{width:26,height:26,borderRadius:6,border:"none",background:"transparent",color:"#7A6C5E",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&#xd7;</button>
+        </div>
+
+        {/* Results */}
+        <div style={{overflowY:"auto",flex:1,padding:"6px 0"}}>
+          {!q&&(
+            <div style={{padding:"28px 20px",textAlign:"center",color:"#9B8E80"}}>
+              <div style={{fontSize:11,fontWeight:600}}>Type to search across all tasks, notes, and timetable blocks</div>
+            </div>
+          )}
+          {q&&results.length===0&&(
+            <div style={{padding:"28px 20px",textAlign:"center",color:"#9B8E80"}}>
+              <div style={{fontSize:24,marginBottom:6}}>&#x1F50E;</div>
+              <div style={{fontSize:13,fontWeight:600}}>No results for "{query}"</div>
+            </div>
+          )}
+          {results.map(function(r,i){
+            const sec=r.section;
+            const selected=i===selIdx;
+            return (
+              <div key={r.kind+"-"+r.id+"-"+i} onClick={()=>handleClick(r)}
+                onMouseEnter={()=>setSelIdx(i)}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"9px 18px",cursor:"pointer",
+                  background:selected?"#EBE4D8":"transparent",transition:"background 0.1s"}}>
+                {/* Type badge */}
+                <span style={{fontSize:10,fontWeight:700,color:TYPE_COLOR[r.kind],background:TYPE_COLOR[r.kind]+"18",
+                  padding:"2px 8px",borderRadius:6,flexShrink:0,textTransform:"uppercase",letterSpacing:"0.3px"}}
+                  dangerouslySetInnerHTML={{__html:TYPE_ICON[r.kind]+" "+TYPE_LABEL[r.kind]}}/>
+                {/* Content */}
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"#1C1714",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
+                    textDecoration:(r.status==="done"||r.archived)?"line-through":"none",
+                    opacity:r.archived?0.6:1}}>
+                    {r.title||"Untitled"}
+                  </div>
+                  {r.detail&&<div style={{fontSize:11,color:"#9B8E80",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginTop:1}}>{r.detail}</div>}
+                </div>
+                {/* Section badge */}
+                {sec&&(
+                  <span style={{fontSize:10,fontWeight:700,background:sec.color+"20",color:sec.color,
+                    padding:"2px 8px",borderRadius:10,flexShrink:0,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {sec.label}
+                  </span>
+                )}
+                {/* Status */}
+                {r.archived&&<span style={{fontSize:9,fontWeight:700,color:"#9B8E80",background:"#EBE4D8",padding:"1px 6px",borderRadius:4,flexShrink:0}}>archived</span>}
+                {r.status==="done"&&!r.archived&&<span style={{fontSize:9,fontWeight:700,color:"#1A7A43",background:"#D4F0E0",padding:"1px 6px",borderRadius:4,flexShrink:0}}>done</span>}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer hint */}
+        {results.length>0&&(
+          <div style={{padding:"8px 18px",borderTop:"1px solid #EBE4D8",background:"#F3EDE3",display:"flex",gap:14,flexShrink:0}}>
+            <span style={{fontSize:10,color:"#9B8E80"}}>&#x2191;&#x2193; navigate</span>
+            <span style={{fontSize:10,color:"#9B8E80"}}>&#x23CE; open</span>
+            <span style={{fontSize:10,color:"#9B8E80"}}>Esc close</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2117,7 +2364,7 @@ function AddTaskModal({secColor,onClose,onAdd}) {
 
 // ─── Taskboards View ──────────────────────────────────────────────────────────────
 
-function BoardsView({sections,byId,tasks,addTask,updateTask,deleteTask,completeTask,moveTask,notes,setView,initialSecId,onSecChange}) {
+function BoardsView({sections,byId,tasks,addTask,updateTask,deleteTask,completeTask,moveTask,notes,setView,initialSecId,onSecChange,archiveTask,archiveDoneTasks}) {
   const boardSecs=sections.filter(s=>s.id!=="overhead");
   const [secId,   setSecId]   =useState(()=>{ const id=initialSecId||boardSecs[0]?.id||""; return boardSecs.find(s=>s.id===id)?id:boardSecs[0]?.id||""; });
   const [showAddTask,setShowAddTask]=useState(false);
@@ -2130,7 +2377,8 @@ function BoardsView({sections,byId,tasks,addTask,updateTask,deleteTask,completeT
   useEffect(()=>{ if(!boardSecs.find(s=>s.id===secId)&&boardSecs.length>0) setSecId(boardSecs[0].id); },[sections]);
   useEffect(()=>{ onSecChange?.(secId); },[secId]);
   const sec=byId[secId]||boardSecs[0]||{color:"#7C7166",label:""};
-  const sTasks=tasks.filter(t=>t.sectionId===secId);
+  const sTasks=tasks.filter(t=>t.sectionId===secId&&!t.archived);
+  const archivedCount=tasks.filter(t=>t.sectionId===secId&&t.archived&&t.type!=="spacer").length;
   const COLS=[{key:"backlog",label:"Backlog",dot:"#8B7D6B"},{key:"this-week",label:"This Week",dot:"#4B3FC7"},{key:"done",label:"Done",dot:"#1A7A43"}];
 
   // Pointer-based drag — replaces HTML5 drag API (unreliable in WebView2/Tauri)
@@ -2193,6 +2441,7 @@ function BoardsView({sections,byId,tasks,addTask,updateTask,deleteTask,completeT
         <div style={{flex:1}}/>
         <button onClick={()=>setSortByPriority(v=>!v)} style={{...S.btnGhost,fontSize:12,background:sortByPriority?"#EBE4D8":"transparent",color:sortByPriority?"#4A3F30":"#6B5E4E"}}>⬆ Priority{sortByPriority?" ✓":""}</button>
         <button onClick={()=>addTask(secId,"","",{type:"spacer",status:"backlog"})} style={{...S.btnGhost,fontSize:12}}>+ Spacer</button>
+        {sTasks.filter(t=>t.status==="done"&&t.type!=="spacer").length>0&&<button onClick={()=>archiveDoneTasks?.(secId)} style={{...S.btnGhost,fontSize:12,borderColor:"#9AD4B5",color:"#1A7A43"}}>&#x1F4E6; Archive Done</button>}
         <button onClick={()=>setShowAddTask(true)} style={{...S.btnDark,background:sec.color}}>+ Add Task</button>
       </div>
       {showAddTask&&<AddTaskModal secColor={sec.color} onClose={()=>setShowAddTask(false)} onAdd={(title,notes,opts)=>{addTask(secId,title,notes,opts);setShowAddTask(false);}}/>}
@@ -2227,7 +2476,7 @@ function BoardsView({sections,byId,tasks,addTask,updateTask,deleteTask,completeT
                     <TaskCard key={task.id} task={task} secColor={sec.color} isOver={isOver} isDragging={dragId===task.id}
                       onDragStart={e=>startDrag(e,task)}
                       updateTask={updateTask} deleteTask={deleteTask} completeTask={completeTask}
-                      addTask={addTask} sections={sections} allNotes={allNotes} setView={setView}/>
+                      addTask={addTask} sections={sections} allNotes={allNotes} setView={setView} archiveTask={archiveTask}/>
                   );
                 })}
               </div>
@@ -2235,6 +2484,11 @@ function BoardsView({sections,byId,tasks,addTask,updateTask,deleteTask,completeT
           );
         })}
       </div>
+      {archivedCount>0&&(
+        <div style={{marginTop:16,textAlign:"center",fontSize:12,color:"#9B8E80",fontStyle:"italic"}}>
+          &#x1F4E6; {archivedCount} archived task{archivedCount!==1?"s":""} in this section (visible in Log)
+        </div>
+      )}
       {drag?.active&&(
         <div style={{position:"fixed",left:drag.x+14,top:drag.y-16,zIndex:900,pointerEvents:"none",
           background:"#FDFAF6",borderRadius:9,padding:"9px 13px",border:"1px solid #E3D9CC",
@@ -2424,7 +2678,7 @@ function TaskEditModal({task,secColor,sections,allNotes,updateTask,completeTask,
 
 // ─── Task Card ────────────────────────────────────────────────────────────────
 
-function TaskCard({task,secColor,isOver,isDragging,onDragStart,updateTask,deleteTask,completeTask,addTask,sections,allNotes,setView}) {
+function TaskCard({task,secColor,isOver,isDragging,onDragStart,updateTask,deleteTask,completeTask,addTask,sections,allNotes,setView,archiveTask}) {
   const openCtx = React.useContext(CtxMenuCtx);
   const {navigateTo:navTo,getDayBlocks,upsertBlock,sections:navSections}=React.useContext(NavCtx)||{};
   const [open,      setOpen]      = useState(false);
@@ -2464,9 +2718,10 @@ function TaskCard({task,secColor,isOver,isDragging,onDragStart,updateTask,delete
            task.status==="done"
              ?{label:"Mark as active",action:()=>updateTask(task.id,{status:"backlog",completedAt:null,monthCompleted:null})}
              :{label:"Mark as done",  action:()=>completeTask(task.id)},
+           task.status==="done"?{label:"&#x1F4E6; Archive",action:()=>archiveTask?.(task.id)}:null,
            {divider:true},
            {label:"Delete",danger:true,action:()=>deleteTask(task.id)},
-         ]); }}
+         ].filter(Boolean)); }}
          style={{background:"#FDFAF6",borderRadius:9,padding:"10px 12px",border:"1px solid #E3D9CC",borderLeft:`3px solid ${secColor}`,opacity:isDragging?0.35:1,outline:isOver?"2px dashed #8B7D6B":"none",transition:"box-shadow 0.15s,opacity 0.15s",cursor:isDragging?"grabbing":"grab",userSelect:"none"}}>
 
       {/* Header row */}
@@ -2526,6 +2781,7 @@ function TaskCard({task,secColor,isOver,isDragging,onDragStart,updateTask,delete
           {!done&&<button onClick={e=>{e.stopPropagation();completeTask(task.id);}} style={{...S.btnMicro,background:"#D4F0E0",color:"#1A7A43"}}>&#x2713; Done</button>}
           {!done&&task.status!=="this-week"&&<button onClick={e=>{e.stopPropagation();updateTask(task.id,{status:"this-week"});}} style={{...S.btnMicro,background:"#E6E3F5",color:"#4B3FC7"}}>&#x2192; This Week</button>}
           {!done&&<button onClick={e=>{e.stopPropagation();setSchedModal(true);}} style={{...S.btnMicro,background:"#E3F0FB",color:"#2A6FAD"}}>&#x1F4C5; Schedule</button>}
+          {done&&<button onClick={e=>{e.stopPropagation();archiveTask?.(task.id);}} style={{...S.btnMicro,background:"#EBE4D8",color:"#7A6C5E"}}>&#x1F4E6; Archive</button>}
           <button onClick={e=>{e.stopPropagation();setEditModal(true);}} style={{...S.btnMicro}}>Edit</button>
         </div>
       )}
@@ -3015,6 +3271,7 @@ function TaskPanel({taskId,tasks,allNotes,byId,updateTask,completeTask}) {
           <span style={{fontSize:10,fontWeight:700,background:sec.color+"22",color:sec.color,padding:"2px 8px",borderRadius:20}}>{sec.label}</span>
           {prio&&<span style={{fontSize:10,fontWeight:700,color:prio.color,background:prio.bg,padding:"2px 6px",borderRadius:8}}>{prio.label}</span>}
           <span style={{fontSize:10,fontWeight:700,color:"#9B8E80",background:"#EBE4D8",padding:"2px 7px",borderRadius:8}}>{task.status}</span>
+          {task.archived&&<span style={{fontSize:10,fontWeight:700,color:"#7A6C5E",background:"#E3D9CC",padding:"2px 7px",borderRadius:8}}>archived</span>}
         </div>
         {editing?(
           <input value={editTitle} onChange={e=>setEditTitle(e.target.value)} autoFocus
@@ -3269,7 +3526,7 @@ function MonthlyView({tasks,sections,byId,initialMode="calendar"}) {
 }
 // ─── Stats View ───────────────────────────────────────────────────────────────
 
-function StatsView({tasks,tt,week,sections,byId}) {
+function StatsView({tasks,tt,week,sections,byId,notes}) {
   const wBlocks=tt[week]||{};
   const secMins={};
   let totalMins=0;
@@ -3358,6 +3615,87 @@ function StatsView({tasks,tt,week,sections,byId}) {
           )}
         </div>
       </div>
+      {/* ── Data Age & Overview ── */}
+      {(()=>{
+        const realTasks=tasks.filter(t=>t.type!=="spacer");
+        const totalTasks=realTasks.length;
+        const activeTCount=realTasks.filter(t=>t.status!=="done"&&!t.archived).length;
+        const doneCount=realTasks.filter(t=>t.status==="done"&&!t.archived).length;
+        const archivedCount=realTasks.filter(t=>t.archived).length;
+        const allNotes=Object.values(notes||{}).flat();
+        const totalNotes=allNotes.length;
+        const ttWeeks=Object.keys(tt||{}).filter(wk=>{const w=tt[wk];return w&&DAYS.some(d=>(w[d]||[]).length>0);});
+        const ttWeekCount=ttWeeks.length;
+        const taskDates=realTasks.filter(t=>t.createdAt).map(t=>t.createdAt);
+        const noteDates=allNotes.filter(n=>n.createdAt).map(n=>n.createdAt);
+        const allDates=[...taskDates,...noteDates];
+        const oldestDate=allDates.length>0?Math.min(...allDates):null;
+        const newestDate=allDates.length>0?Math.max(...allDates):null;
+        const fmtDate=ts=>ts?new Date(ts).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"N/A";
+        const daysSince=ts=>ts?Math.floor((Date.now()-ts)/(1000*60*60*24)):0;
+        const oldestTtWeek=ttWeeks.length>0?ttWeeks.sort()[0]:null;
+        const newestTtWeek=ttWeeks.length>0?ttWeeks.sort().reverse()[0]:null;
+        // Per-section breakdown
+        const secStats=boardSecs.map(sec=>{
+          const st=realTasks.filter(t=>t.sectionId===sec.id);
+          const sn=(notes||{})[sec.id]||[];
+          const oldest=st.filter(t=>t.createdAt).map(t=>t.createdAt);
+          return{sec,tasks:st.length,notes:sn.length,oldest:oldest.length>0?Math.min(...oldest):null,
+            active:st.filter(t=>t.status!=="done"&&!t.archived).length,
+            archived:st.filter(t=>t.archived).length};
+        }).filter(s=>s.tasks>0||s.notes>0);
+        return (
+          <div style={{marginTop:20,background:"#EBE4D8",borderRadius:14,padding:"20px 22px"}}>
+            <div style={{fontWeight:700,fontSize:13,color:"#4A3F30",marginBottom:18}}>&#x1F4CA; Data Overview</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:18}}>
+              {[[totalTasks,"Total Tasks",activeTCount+" active, "+doneCount+" done"+(archivedCount>0?", "+archivedCount+" archived":"")],
+                [totalNotes,"Notes","across "+Object.keys(notes||{}).length+" sections"],
+                [ttWeekCount,"Timetable Weeks",oldestTtWeek&&newestTtWeek?oldestTtWeek+" to "+newestTtWeek:"no data"]
+              ].map(([v,l,s],i)=>(
+                <div key={i} style={{background:"#FDFAF6",borderRadius:10,padding:"14px 16px",border:"1px solid #E3D9CC"}}>
+                  <div style={{fontSize:22,fontWeight:700,fontFamily:'"Playfair Display",serif'}}>{v}</div>
+                  <div style={{fontSize:12,fontWeight:600,color:"#4A3F30",marginTop:2}}>{l}</div>
+                  <div style={{fontSize:10,color:"#9B8E80",marginTop:2}}>{s}</div>
+                </div>
+              ))}
+            </div>
+            {oldestDate&&(
+              <div style={{display:"flex",gap:16,marginBottom:18,padding:"12px 14px",background:"#FDFAF6",borderRadius:10,border:"1px solid #E3D9CC"}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>First Entry</div>
+                  <div style={{fontSize:13,fontWeight:600}}>{fmtDate(oldestDate)}</div>
+                  <div style={{fontSize:11,color:"#9B8E80"}}>{daysSince(oldestDate)} days ago</div>
+                </div>
+                <div style={{width:1,background:"#E3D9CC"}}/>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:4}}>Latest Entry</div>
+                  <div style={{fontSize:13,fontWeight:600}}>{fmtDate(newestDate)}</div>
+                  <div style={{fontSize:11,color:"#9B8E80"}}>{daysSince(newestDate)===0?"today":daysSince(newestDate)+" days ago"}</div>
+                </div>
+              </div>
+            )}
+            {secStats.length>0&&(
+              <div>
+                <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:10}}>Per Section</div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {secStats.map(s=>(
+                    <div key={s.sec.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:"#FDFAF6",borderRadius:8,border:"1px solid #E3D9CC"}}>
+                      <Dot color={s.sec.color} size={9}/>
+                      <span style={{fontSize:12,fontWeight:600,flex:1}}>{s.sec.label}</span>
+                      <div style={{display:"flex",gap:4}}>
+                        <Badge bg="#E6E3F5" fg="#4B3FC7">{s.tasks} tasks</Badge>
+                        <Badge bg="#E3F0FB" fg="#2A6FAD">{s.notes} notes</Badge>
+                        {s.archived>0&&<Badge bg="#EBE4D8" fg="#9B8E80">{s.archived} archived</Badge>}
+                      </div>
+                      {s.oldest&&<span style={{fontSize:10,color:"#9B8E80",flexShrink:0}}>{fmtDate(s.oldest)}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
