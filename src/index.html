@@ -1040,7 +1040,21 @@ function TimePicker({value, onChange, label}) {
   const curH = parseInt(hStr)||0;
   const curM = parseInt(mStr)||0;
 
-  function toggle12(){ const v=!use12; setUse12(v); try{ sessionStorage.setItem("py-time-12h",v?"1":"0"); }catch{} }
+  // Listen for 12h/24h changes from other TimePicker instances
+  useEffect(()=>{
+    function onStorage(e){ if(e.key==="py-time-12h") setUse12(e.newValue==="1"); }
+    window.addEventListener("storage",onStorage);
+    // Also listen for custom event (same-window sync)
+    function onCustom(e){ setUse12(e.detail); }
+    window.addEventListener("py-time-toggle",onCustom);
+    return()=>{ window.removeEventListener("storage",onStorage); window.removeEventListener("py-time-toggle",onCustom); };
+  },[]);
+
+  function toggle12(){
+    const v=!use12; setUse12(v);
+    try{ sessionStorage.setItem("py-time-12h",v?"1":"0"); }catch{}
+    window.dispatchEvent(new CustomEvent("py-time-toggle",{detail:v}));
+  }
 
   useEffect(()=>{
     if(!open) return;
@@ -1050,6 +1064,12 @@ function TimePicker({value, onChange, label}) {
   },[open]);
 
   function pickHour(h24){ onChange(`${String(h24).padStart(2,"0")}:${String(curM).padStart(2,"0")}`); setPhase("minute"); }
+  // Switch AM/PM without changing phase
+  function setAmPm(wantPm){
+    const h12=curH%12;
+    const newH=wantPm?h12+12:h12;
+    if(newH!==curH) onChange(`${String(newH).padStart(2,"0")}:${String(curM).padStart(2,"0")}`);
+  }
   function pickMinute(m){ onChange(`${String(curH).padStart(2,"0")}:${String(m).padStart(2,"0")}`); setOpen(false); setPhase("hour"); }
 
   function displayVal(){
@@ -1063,27 +1083,25 @@ function TimePicker({value, onChange, label}) {
     const OUTER_R=80, INNER_R=52;
     const hours=[];
     if(use12){
-      // 12h: outer ring 1-12, inner ring 13-23+0 shown as 1-11PM + 12AM
+      // 12h: single ring of 1-12, AM/PM handled by separate buttons
       for(let h=1;h<=12;h++){
         const a=(h/12)*2*Math.PI-Math.PI/2;
-        hours.push({h24:h,label:String(h),x:CX+OUTER_R*Math.cos(a),y:CY+OUTER_R*Math.sin(a),ring:"outer"});
+        // In AM: 12=0, 1-11=1-11. In PM: 12=12, 1-11=13-23
+        const isPm=curH>=12;
+        const h24=h===12?(isPm?12:0):(isPm?h+12:h);
+        hours.push({h24,label:String(h),x:CX+OUTER_R*Math.cos(a),y:CY+OUTER_R*Math.sin(a),ring:"outer"});
       }
-      const pm=[13,14,15,16,17,18,19,20,21,22,23,0];
-      pm.forEach((h24,i)=>{
-        const a=(i/12)*2*Math.PI-Math.PI/2;
-        const disp=h24===0?12:h24-12;
-        hours.push({h24,label:String(disp),x:CX+INNER_R*Math.cos(a),y:CY+INNER_R*Math.sin(a),ring:"inner"});
-      });
     } else {
+      // 24h: outer ring 1-12, inner ring 13-0 aligned (13 under 1, 14 under 2, etc.)
       for(let h=1;h<=12;h++){
         const a=(h/12)*2*Math.PI-Math.PI/2;
         hours.push({h24:h,label:String(h),x:CX+OUTER_R*Math.cos(a),y:CY+OUTER_R*Math.sin(a),ring:"outer"});
       }
-      const inner=[13,14,15,16,17,18,19,20,21,22,23,0];
-      inner.forEach((h24,i)=>{
-        const a=(i/12)*2*Math.PI-Math.PI/2;
+      for(let h=1;h<=12;h++){
+        const a=(h/12)*2*Math.PI-Math.PI/2;
+        const h24=h===12?0:h+12; // 13 under 1, 14 under 2, ..., 0 under 12
         hours.push({h24,label:String(h24),x:CX+INNER_R*Math.cos(a),y:CY+INNER_R*Math.sin(a),ring:"inner"});
-      });
+      }
     }
     const centerLabel=use12?`${curH%12||12}:${String(curM).padStart(2,"0")} ${curH<12?"AM":"PM"}`:`${String(curH).padStart(2,"0")}:${String(curM).padStart(2,"0")}`;
     return (
@@ -1092,7 +1110,7 @@ function TimePicker({value, onChange, label}) {
         {hours.map(({h24,label,x,y,ring})=>{
           const sel=h24===curH;
           return (
-            <g key={h24} onClick={()=>pickHour(h24)}>
+            <g key={h24+"-"+ring} onClick={()=>pickHour(h24)}>
               <circle cx={x} cy={y} r={ring==="outer"?18:15} fill={sel?"#1C1714":"transparent"} stroke="none"/>
               <text x={x} y={y} textAnchor="middle" dominantBaseline="central"
                 fontSize={ring==="outer"?13:11} fontWeight={sel?700:500}
@@ -1101,7 +1119,7 @@ function TimePicker({value, onChange, label}) {
           );
         })}
         <text x={CX} y={CY} textAnchor="middle" dominantBaseline="central"
-          fontSize={10} fill="#9B8E80" fontFamily='"DM Sans",sans-serif'>{centerLabel}</text>
+          fontSize={use12?11:10} fill="#9B8E80" fontFamily='"DM Sans",sans-serif'>{centerLabel}</text>
       </svg>
     );
   }
@@ -1162,9 +1180,9 @@ function TimePicker({value, onChange, label}) {
           </div>
           {use12&&phase==="hour"&&(
             <div style={{display:"flex",gap:4,justifyContent:"center",marginBottom:6}}>
-              <button onClick={()=>{ if(curH>=12) pickHour(curH-12); }}
+              <button onClick={()=>setAmPm(false)}
                 style={{...S.btnMicro,background:curH<12?"#1C1714":"#EBE4D8",color:curH<12?"#F8F3EC":"#4A3F30",flex:1,padding:"4px 0"}}>AM</button>
-              <button onClick={()=>{ if(curH<12) pickHour(curH+12); }}
+              <button onClick={()=>setAmPm(true)}
                 style={{...S.btnMicro,background:curH>=12?"#1C1714":"#EBE4D8",color:curH>=12?"#F8F3EC":"#4A3F30",flex:1,padding:"4px 0"}}>PM</button>
             </div>
           )}
@@ -1344,10 +1362,43 @@ function QuickCaptureModal({sections,byId,addTask,addNote,onClose}) {
 
 // ─── Search Modal ─────────────────────────────────────────────────────────────
 
+// Fuzzy match: allows up to maxDist character edits (Levenshtein) between query and any substring of text
+function fuzzyMatch(text, query, maxDist) {
+  if (!text || !query) return false;
+  const t = text.toLowerCase();
+  const q = query.toLowerCase();
+  if (t.includes(q)) return true;
+  if (q.length <= 2 || q.length > 40) return false;
+  // Sliding window: check substrings of text near query length
+  const wMin = Math.max(1, q.length - maxDist);
+  const wMax = q.length + maxDist;
+  for (let wLen = wMin; wLen <= wMax; wLen++) {
+    for (let i = 0; i <= t.length - wLen; i++) {
+      const sub = t.slice(i, i + wLen);
+      let dist = 0;
+      const rows = q.length + 1;
+      const cols = sub.length + 1;
+      const d = new Array(rows);
+      for (let r = 0; r < rows; r++) { d[r] = new Array(cols); d[r][0] = r; }
+      for (let c = 0; c < cols; c++) d[0][c] = c;
+      for (let r = 1; r < rows; r++) {
+        for (let c = 1; c < cols; c++) {
+          const cost = q[r - 1] === sub[c - 1] ? 0 : 1;
+          d[r][c] = Math.min(d[r - 1][c] + 1, d[r][c - 1] + 1, d[r - 1][c - 1] + cost);
+        }
+      }
+      dist = d[q.length][sub.length];
+      if (dist <= maxDist) return true;
+    }
+  }
+  return false;
+}
+
 function SearchModal({tasks,notes,sections,byId,tt,onClose}) {
   const {navigateToFresh,navigateToDate}=React.useContext(NavCtx)||{};
   const [query,setQuery]=useState("");
   const [selIdx,setSelIdx]=useState(0);
+  const [showArchived,setShowArchived]=useState(false);
   const inputRef=useRef(null);
 
   useEffect(()=>{ setTimeout(()=>inputRef.current?.focus(),50); },[]);
@@ -1357,14 +1408,35 @@ function SearchModal({tasks,notes,sections,byId,tt,onClose}) {
     return()=>window.removeEventListener("keydown",handler);
   },[]);
 
-  const q=query.trim().toLowerCase();
+  const q=query.trim();
+  const qLow=q.toLowerCase();
+
+  // Detect regex: query wrapped in /pattern/ or /pattern/flags
+  let useRegex=false, regexObj=null;
+  if (q.length>=3 && q[0]==="/") {
+    const lastSlash=q.lastIndexOf("/");
+    if (lastSlash>0) {
+      const pattern=q.slice(1,lastSlash);
+      const flags=q.slice(lastSlash+1);
+      try { regexObj=new RegExp(pattern,flags.includes("i")?flags:flags+"i"); useRegex=true; }
+      catch(e) { /* invalid regex, fall through to plain search */ }
+    }
+  }
+
+  // Determine typo tolerance: 1 for short queries, 2 for longer
+  const maxTypo = qLow.length <= 5 ? 1 : 2;
+
+  function matches(text) {
+    if (!q) return false;
+    if (useRegex && regexObj) return regexObj.test(text || "");
+    return fuzzyMatch(text, qLow, maxTypo);
+  }
 
   // Search tasks
   const taskResults=q?tasks.filter(t=>
-    t.type!=="spacer"&&(
-      (t.title||"").toLowerCase().includes(q)||
-      (t.notes||"").toLowerCase().includes(q)
-    )
+    t.type!=="spacer"&&
+    (!t.archived||showArchived)&&
+    (matches(t.title)||matches(t.notes))
   ).slice(0,12).map(t=>({
     kind:"task",id:t.id,title:t.title,
     section:byId[t.sectionId],
@@ -1378,8 +1450,7 @@ function SearchModal({tasks,notes,sections,byId,tt,onClose}) {
     return (Array.isArray(arr)?arr:[]).map(function(n){ return Object.assign({},n,{_sid:sid}); });
   });
   const noteResults=q?allNotes.filter(n=>
-    (n.title||"").toLowerCase().includes(q)||
-    stripHtmlText(n.content).toLowerCase().includes(q)
+    matches(n.title)||matches(stripHtmlText(n.content))
   ).slice(0,12).map(n=>({
     kind:"note",id:n.id,title:n.title,
     section:byId[n._sid],
@@ -1399,7 +1470,7 @@ function SearchModal({tasks,notes,sections,byId,tt,onClose}) {
           const blk=arr[bi];
           const sec=blk.sectionId?byId[blk.sectionId]:null;
           const blkLabel=blk.label||(sec?sec.label:"")||"";
-          if(blkLabel.toLowerCase().includes(q)){
+          if(matches(blkLabel)){
             blockResults.push({
               kind:"block",id:blk.id,
               title:blkLabel||"Block",
@@ -1414,7 +1485,7 @@ function SearchModal({tasks,notes,sections,byId,tt,onClose}) {
   }
 
   const results=[...taskResults,...noteResults,...blockResults.slice(0,8)];
-  useEffect(()=>{ setSelIdx(0); },[query]);
+  useEffect(()=>{ setSelIdx(0); },[query,showArchived]);
 
   function handleClick(r){
     if(r.kind==="task") navigateToFresh?.({type:"task",id:r.id});
@@ -1443,6 +1514,10 @@ function SearchModal({tasks,notes,sections,byId,tt,onClose}) {
           <input ref={inputRef} value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={handleKeyDown}
             placeholder="Search tasks, notes, blocks..."
             style={{flex:1,border:"none",background:"transparent",fontSize:15,fontWeight:500,fontFamily:'"DM Sans",sans-serif',color:"#1C1714",outline:"none"}}/>
+          <button onClick={()=>setShowArchived(v=>!v)} title={showArchived?"Hiding archived":"Showing archived"}
+            style={{...S.btnMicro,background:showArchived?"#1C1714":"#EBE4D8",color:showArchived?"#F8F3EC":"#9B8E80",padding:"2px 8px",fontSize:10,flexShrink:0}}>
+            {showArchived?"+ Archived":"No Archive"}
+          </button>
           <span style={{fontSize:10,color:"#9B8E80",flexShrink:0,background:"#EBE4D8",padding:"2px 8px",borderRadius:4,fontWeight:600}}>Ctrl+K</span>
           <button onClick={onClose} style={{width:26,height:26,borderRadius:6,border:"none",background:"transparent",color:"#7A6C5E",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&#xd7;</button>
         </div>
@@ -1452,6 +1527,7 @@ function SearchModal({tasks,notes,sections,byId,tt,onClose}) {
           {!q&&(
             <div style={{padding:"28px 20px",textAlign:"center",color:"#9B8E80"}}>
               <div style={{fontSize:11,fontWeight:600}}>Type to search across all tasks, notes, and timetable blocks</div>
+              <div style={{fontSize:10,marginTop:6,color:"#B8ADA0"}}>Supports fuzzy matching. Use /pattern/ for regex.</div>
             </div>
           )}
           {q&&results.length===0&&(
@@ -2414,7 +2490,6 @@ function BoardsView({sections,byId,tasks,addTask,updateTask,deleteTask,completeT
   useEffect(()=>{ onSecChange?.(secId); },[secId]);
   const sec=byId[secId]||boardSecs[0]||{color:"#7C7166",label:""};
   const sTasks=tasks.filter(t=>t.sectionId===secId&&!t.archived);
-  const archivedCount=tasks.filter(t=>t.sectionId===secId&&t.archived&&t.type!=="spacer").length;
   const COLS=[{key:"backlog",label:"Backlog",dot:"#8B7D6B"},{key:"this-week",label:"This Week",dot:"#4B3FC7"},{key:"done",label:"Done",dot:"#1A7A43"}];
 
   // Pointer-based drag — replaces HTML5 drag API (unreliable in WebView2/Tauri)
@@ -2520,11 +2595,6 @@ function BoardsView({sections,byId,tasks,addTask,updateTask,deleteTask,completeT
           );
         })}
       </div>
-      {archivedCount>0&&(
-        <div style={{marginTop:16,textAlign:"center",fontSize:12,color:"#9B8E80",fontStyle:"italic"}}>
-          &#x1F4E6; {archivedCount} archived task{archivedCount!==1?"s":""} in this section (visible in Log)
-        </div>
-      )}
       {drag?.active&&(
         <div style={{position:"fixed",left:drag.x+14,top:drag.y-16,zIndex:900,pointerEvents:"none",
           background:"#FDFAF6",borderRadius:9,padding:"9px 13px",border:"1px solid #E3D9CC",
