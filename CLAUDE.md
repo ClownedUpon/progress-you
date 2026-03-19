@@ -101,3 +101,4 @@ The GitHub Actions workflow in `.github/workflows/release.yml` builds the MSI, s
 5. When editing styles, follow the existing design system: warm earth tones (#F8F3EC background, #1C1714 dark, #EBE4D8 muted, Playfair Display for headings, DM Sans for body)
 6. All new data fields must be added to the relevant migration function (`migrateTasks`, `migrateNotes`, `migrateTt`, `migrateTrackers`) with `??` defaults so existing data isn't broken
 7. Components must be defined before they are referenced — file load order is 01 through 06
+8. Always merge worktree branches into `main` so that `npm run tauri dev` picks up changes immediately — CI workflow safeguards prevent bad builds from shipping

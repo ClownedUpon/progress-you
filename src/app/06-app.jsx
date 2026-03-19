@@ -108,13 +108,24 @@ function App() {
       const tmpl=await sget('py-tt-templates');
       const sb=await sget('py-tt-setblocks');
       const trk=await sget('py-trackers');
-      if(sec) setSections(sec);
-      if(t) { const migrated = migrateTt(t); const pruned = await pruneTt(migrated); setTt(pruned); }
-      if(k)   setTasks(migrateTasks(k));
-      if(n)   setNotes(migrateNotes(n));
-      if(tmpl) setTemplates(tmpl);
-      if(sb)   setSetBlocks(sb);
-      if(trk)  setTrackers(migrateTrackers(trk));
+      const isFirstRun = !sec && !t && !k && !n && !tmpl && !sb && !trk;
+      if (isFirstRun) {
+        try {
+          const seed = buildSeedData();
+          setTasks(seed.tasks);
+          setNotes(seed.notes);
+          setTrackers(seed.trackers);
+          setTt(seed.tt);
+        } catch(e) { console.error("Seed data error:", e); }
+      } else {
+        if(sec) setSections(sec);
+        if(t) { const migrated = migrateTt(t); const pruned = await pruneTt(migrated); setTt(pruned); }
+        if(k)   setTasks(migrateTasks(k));
+        if(n)   setNotes(migrateNotes(n));
+        if(tmpl) setTemplates(tmpl);
+        if(sb)   setSetBlocks(sb);
+        if(trk)  setTrackers(migrateTrackers(trk));
+      }
       setReady(true);
       checkForUpdate();
       runBackupIfDue();

@@ -1991,6 +1991,27 @@ function SettingsModal({sections,setSections,onClose,checkForUpdate,tasks,setTas
             )}
           </div>
 
+          {/* Load demo data */}
+          <div style={{background:"#F3EDE3",borderRadius:9,border:"1px solid #E3D9CC",padding:"12px 14px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:"#1C1714"}}>Demo Data</div>
+                <div style={{fontSize:11,color:"#6B5E4E",marginTop:2}}>Load sample tasks, notes, trackers, and timetable blocks to explore features.</div>
+              </div>
+              <button onClick={function(){
+                try {
+                  var seed = buildSeedData();
+                  setSections(DEFAULT_SECTIONS.map(function(s){ return Object.assign({},s); }));
+                  setTasks(seed.tasks);
+                  setNotes(seed.notes);
+                  setTrackers(seed.trackers);
+                  setTt(seed.tt);
+                  onClose();
+                } catch(e) { console.error("Seed data error:", e); }
+              }} style={{...S.btnGhost,fontSize:11,padding:"5px 14px",flexShrink:0}}>Load Demo</button>
+            </div>
+          </div>
+
           <div style={{textAlign:"center",color:"#C2B49E",fontSize:11}}>
             {appVer ? "Progress You  \u00B7  v" + appVer : "Progress You  \u00B7  Dev build"}
           </div>

@@ -4,14 +4,12 @@ const NavCtx     = React.createContext(null);
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_SECTIONS = [
-  { id:"overhead", label:"Overhead / Admin", color:"#7C7166" },
-  { id:"work",     label:"Work Journal",     color:"#0C7B7B" },
-  { id:"personal", label:"Personal Journal", color:"#B05A12" },
-  { id:"thesis",   label:"Thesis Work",      color:"#4B3FC7" },
-  { id:"jobs",     label:"Job Search",       color:"#1A7A43" },
-  { id:"tech",     label:"Tech Backlog",     color:"#135D99" },
-  { id:"books",    label:"Books",            color:"#9B1A55" },
-  { id:"new",      label:"New Directions",   color:"#7A4010" },
+  { id:"work",     label:"Work",            color:"#0C7B7B" },
+  { id:"personal", label:"Personal",        color:"#B05A12" },
+  { id:"health",   label:"Health & Fitness", color:"#1A7A43" },
+  { id:"learning", label:"Learning",        color:"#4B3FC7" },
+  { id:"projects", label:"Side Projects",   color:"#135D99" },
+  { id:"finance",  label:"Finance",         color:"#7C7166" },
 ];
 
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -132,6 +130,127 @@ function noteDescendants(items,id) {
 }
 function makeNote(parentId=null,order=0) {
   return{id:uid(),parentId,title:"Untitled Note",content:"<p><br></p>",order,createdAt:Date.now(),tags:[],linkedTaskIds:[],linkedTrackerIds:[]};
+}
+
+// ─── Seed Data ───────────────────────────────────────────────────────────────
+
+function buildSeedData() {
+  const now = Date.now();
+  const today = new Date();
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+  const in3days = new Date(today); in3days.setDate(in3days.getDate() + 3);
+  const fmtDate = function(d) { return d.toISOString().slice(0, 10); };
+  const wk = mondayOf(today);
+  const dayName = DAYS[(today.getDay() + 6) % 7]; // Monday=0 index
+
+  // ── IDs (generated once, cross-referenced below)
+  var tWork1 = uid(), tWork2 = uid();
+  var tPers1 = uid(), tPers2 = uid();
+  var tHealth1 = uid(), tHealth2 = uid();
+  var tLearn1 = uid();
+  var tProj1 = uid();
+
+  var nWork1 = uid();
+  var nProj1 = uid();
+  var nLearn1 = uid();
+  var nPers1 = uid();
+  var nFin1 = uid();
+
+  var trHealth1 = uid(), trLearn1 = uid(), trHealth2 = uid();
+
+  // ── Tasks
+  var tasks = [
+    { id:tWork1, sectionId:"work", title:"Prepare weekly report", notes:"This task is linked to your Meeting Notes. Open the task panel to see linked items and click through!",
+      type:"task", status:"doing", order:0, priority:"high", checklist:[], linkedNoteIds:[nWork1], linkedTrackerIds:[],
+      dueDate:fmtDate(tomorrow), dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tWork2, sectionId:"work", title:"Review project timeline", notes:"",
+      type:"task", status:"backlog", order:1, priority:"normal", checklist:[], linkedNoteIds:[], linkedTrackerIds:[],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tPers1, sectionId:"personal", title:"Plan weekend trip", notes:"This task is linked to a Trip Ideas note. Click the link to jump there!",
+      type:"task", status:"doing", order:0, priority:"normal",
+      checklist:[{id:uid(),text:"Pick destination",done:false},{id:uid(),text:"Book accommodation",done:false},{id:uid(),text:"Pack bags",done:false}],
+      linkedNoteIds:[nPers1], linkedTrackerIds:[],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tPers2, sectionId:"personal", title:"Call dentist", notes:"",
+      type:"task", status:"backlog", order:1, priority:"normal", checklist:[], linkedNoteIds:[], linkedTrackerIds:[],
+      dueDate:fmtDate(in3days), dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tHealth1, sectionId:"health", title:"Go for a morning run", notes:"This task is linked to your Morning Run tracker. Click the tracker link to log your runs!",
+      type:"task", status:"doing", order:0, priority:"normal", checklist:[], linkedNoteIds:[], linkedTrackerIds:[trHealth1],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tHealth2, sectionId:"health", title:"Meal prep for the week", notes:"",
+      type:"task", status:"backlog", order:1, priority:"normal", checklist:[], linkedNoteIds:[], linkedTrackerIds:[],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tLearn1, sectionId:"learning", title:"Read a chapter of current book", notes:"This task links to both a Reading List note and a Read 30 Minutes tracker. Click either to explore!",
+      type:"task", status:"doing", order:0, priority:"normal", checklist:[], linkedNoteIds:[nLearn1], linkedTrackerIds:[trLearn1],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tProj1, sectionId:"projects", title:"Brainstorm app ideas", notes:"This task is linked to a Project Ideas note. Use notes to flesh out your ideas!",
+      type:"task", status:"backlog", order:0, priority:"normal", checklist:[], linkedNoteIds:[nProj1], linkedTrackerIds:[],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+  ];
+
+  // ── Notes (keyed by sectionId)
+  var notes = {
+    work: [
+      { id:nWork1, parentId:null, title:"Meeting Notes", order:0, createdAt:now, tags:["meetings"],
+        linkedTaskIds:[tWork1], linkedTrackerIds:[],
+        content:"<p><b>Team Sync - Sample</b></p><p>Agenda items discussed:</p><ul><li>Project status update</li><li>Upcoming deadlines</li><li>Resource planning</li></ul><p><br></p><p><i>This note is linked to the \"Prepare weekly report\" task. Click the linked task in the sidebar to jump there!</i></p>",
+        remindAt:null, remindFired:false },
+    ],
+    personal: [
+      { id:nPers1, parentId:null, title:"Trip Ideas", order:0, createdAt:now, tags:["travel"],
+        linkedTaskIds:[tPers1], linkedTrackerIds:[],
+        content:"<p><b>Weekend Getaway Ideas</b></p><ul><li>Mountain cabin retreat</li><li>Beach day trip</li><li>City food tour</li></ul><p><br></p><p><i>Linked to \"Plan weekend trip\". Right-click items anywhere to discover more actions!</i></p>",
+        remindAt:null, remindFired:false },
+    ],
+    learning: [
+      { id:nLearn1, parentId:null, title:"Reading List", order:0, createdAt:now, tags:["books","reading"],
+        linkedTaskIds:[tLearn1], linkedTrackerIds:[trLearn1],
+        content:"<p><b>Books to Read</b></p><ol><li>Atomic Habits - James Clear</li><li>Deep Work - Cal Newport</li><li>The Pragmatic Programmer</li></ol><p><br></p><p><i>This note links to the \"Read a chapter\" task and the \"Read 30 Minutes\" tracker. Everything connects!</i></p>",
+        remindAt:null, remindFired:false },
+    ],
+    projects: [
+      { id:nProj1, parentId:null, title:"Project Ideas", order:0, createdAt:now, tags:["ideas"],
+        linkedTaskIds:[tProj1], linkedTrackerIds:[],
+        content:"<p><b>App Ideas Brainstorm</b></p><ul><li>Habit tracker with streaks</li><li>Recipe manager</li><li>Budget planner</li></ul><p><br></p><p><i>Linked to \"Brainstorm app ideas\". Try the link button to connect more items together!</i></p>",
+        remindAt:null, remindFired:false },
+    ],
+    finance: [
+      { id:nFin1, parentId:null, title:"Budget Template", order:0, createdAt:now, tags:["budget"],
+        linkedTaskIds:[], linkedTrackerIds:[],
+        content:"<p><b>Monthly Budget</b></p><p>Income: ___</p><p>Rent/Mortgage: ___</p><p>Groceries: ___</p><p>Transport: ___</p><p>Savings: ___</p><p><br></p><p><i>Tip: Link this note to a task or tracker to keep your finances connected to your goals!</i></p>",
+        remindAt:null, remindFired:false },
+    ],
+  };
+
+  // ── Trackers
+  var trackers = [
+    { id:trHealth1, title:"Morning Run", sectionId:"health", color:"#1A7A43",
+      activeDays:[1,1,1,1,1,0,0], completions:{}, linkedTaskIds:[tHealth1], linkedNoteIds:[],
+      order:0, archived:false, createdAt:now },
+    { id:trLearn1, title:"Read 30 Minutes", sectionId:"learning", color:"#4B3FC7",
+      activeDays:[1,1,1,1,1,1,1], completions:{}, linkedTaskIds:[tLearn1], linkedNoteIds:[nLearn1],
+      order:1, archived:false, createdAt:now },
+    { id:trHealth2, title:"Drink Water", sectionId:"health", color:"#0C7B7B",
+      activeDays:[1,1,1,1,1,1,1], completions:{}, linkedTaskIds:[], linkedNoteIds:[],
+      order:2, archived:false, createdAt:now },
+  ];
+
+  // ── Timetable (blocks for today's day in current week)
+  var dayBlocks = [
+    { id:uid(), type:"section", sectionId:"work", label:"Morning Focus", start:"09:00", end:"11:00",
+      linkedItems:[{type:"task",id:tWork1,snapshot:"Prepare weekly report"}] },
+    { id:uid(), type:"break", sectionId:null, label:"Lunch Break", start:"12:00", end:"13:00",
+      linkedItems:[] },
+    { id:uid(), type:"section", sectionId:"learning", label:"Learning Time", start:"14:00", end:"15:30",
+      linkedItems:[{type:"task",id:tLearn1,snapshot:"Read a chapter of current book"},{type:"note",id:nLearn1,snapshot:"Reading List"}] },
+    { id:uid(), type:"section", sectionId:"health", label:"Exercise", start:"17:00", end:"18:00",
+      linkedItems:[{type:"tracker",id:trHealth1,snapshot:"Morning Run"}] },
+  ];
+  var tt = {};
+  tt[wk] = {};
+  tt[wk][dayName] = dayBlocks;
+
+  return { tasks:tasks, notes:notes, trackers:trackers, tt:tt };
 }
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
