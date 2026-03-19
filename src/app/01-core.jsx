@@ -1,6 +1,40 @@
-const { useState, useEffect, useRef, useCallback } = React;
+const { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } = React;
 const CtxMenuCtx = React.createContext(null);
 const NavCtx     = React.createContext(null);
+
+// ─── Tiptap ──────────────────────────────────────────────────────────────────
+var _TT = window.Tiptap || {};
+var useEditor       = _TT.useEditor;
+var EditorContent   = _TT.EditorContent;
+var NodeViewWrapper = _TT.NodeViewWrapper;
+var ReactNodeViewRenderer = _TT.ReactNodeViewRenderer;
+var TiptapNode      = _TT.Node;
+var TiptapMark      = _TT.Mark;
+var TiptapExtension = _TT.Extension;
+var mergeAttributes = _TT.mergeAttributes;
+var InputRule       = _TT.InputRule;
+var wrappingInputRule = _TT.wrappingInputRule;
+var TiptapDoc       = _TT.Document;
+var TiptapParagraph = _TT.Paragraph;
+var TiptapText      = _TT.Text;
+var TiptapBold      = _TT.Bold;
+var TiptapItalic    = _TT.Italic;
+var TiptapUnderline = _TT.Underline;
+var TiptapHeading   = _TT.Heading;
+var TiptapBulletList  = _TT.BulletList;
+var TiptapOrderedList = _TT.OrderedList;
+var TiptapListItem    = _TT.ListItem;
+var TiptapHardBreak   = _TT.HardBreak;
+var TiptapHistory     = _TT.History;
+var TiptapDropcursor  = _TT.Dropcursor;
+var TiptapGapcursor   = _TT.Gapcursor;
+var TiptapColor       = _TT.Color;
+var TiptapTextStyle   = _TT.TextStyle;
+var TiptapFontFamily  = _TT.FontFamily;
+var TiptapImage       = _TT.Image;
+var TiptapPlaceholder = _TT.Placeholder;
+var TiptapSuggestion  = _TT.Suggestion;
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_SECTIONS = [
@@ -452,4 +486,211 @@ const PRIORITY = {
   normal: null,
   low:    {label:"↓ Low",   color:"#9B8E80", bg:"#EBE4D8"},
 };
+
+// ─── Tiptap Custom Extensions ────────────────────────────────────────────────
+
+var CalloutNode = TiptapNode ? TiptapNode.create({
+  name: "callout",
+  group: "block",
+  content: "inline*",
+  defining: true,
+  parseHTML: function() { return [{ tag: "div.note-callout" }]; },
+  renderHTML: function(p) {
+    return ["div", mergeAttributes(p.HTMLAttributes, { class: "note-callout" }), 0];
+  },
+  addInputRules: function() {
+    var t = this.type;
+    return [wrappingInputRule({ find: /^>\s$/, type: t })];
+  },
+}) : null;
+
+var DateChipNode = TiptapNode ? TiptapNode.create({
+  name: "dateChip",
+  group: "inline",
+  inline: true,
+  atom: true,
+  addAttributes: function() {
+    return {
+      date: { default: null, parseHTML: function(el) { return el.getAttribute("data-date"); } },
+    };
+  },
+  parseHTML: function() { return [{ tag: "span.note-date-chip" }]; },
+  renderHTML: function(p) {
+    var d = p.node.attrs.date;
+    var label = d ? new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" }) : "?";
+    return ["span", { class: "note-date-chip", "data-date": d, contenteditable: "false" }, "\uD83D\uDCC5 " + label];
+  },
+}) : null;
+
+var TaskChipNode = TiptapNode ? TiptapNode.create({
+  name: "taskChip",
+  group: "inline",
+  inline: true,
+  atom: true,
+  addAttributes: function() {
+    return {
+      taskId:   { default: null, parseHTML: function(el) { return el.getAttribute("data-task-id"); } },
+      snapshot: { default: "",   parseHTML: function(el) { return el.getAttribute("data-snapshot") || el.textContent.replace(/^\uD83D\uDCCC\s*/, ""); } },
+    };
+  },
+  parseHTML: function() { return [{ tag: "span.note-task-chip" }]; },
+  renderHTML: function(p) {
+    var a = p.node.attrs;
+    return ["span", { class: "note-task-chip", "data-task-id": a.taskId, "data-snapshot": a.snapshot, contenteditable: "false" }, "\uD83D\uDCCC " + a.snapshot];
+  },
+}) : null;
+
+var NoteImageNode = TiptapNode ? TiptapNode.create({
+  name: "noteImage",
+  group: "block",
+  atom: true,
+  addAttributes: function() {
+    return {
+      path: { default: null, parseHTML: function(el) { return el.getAttribute("data-path"); } },
+    };
+  },
+  parseHTML: function() { return [{ tag: "img[data-path]" }, { tag: "img.note-img" }]; },
+  renderHTML: function(p) {
+    return ["img", { class: "note-img", "data-path": p.node.attrs.path, alt: "" }];
+  },
+}) : null;
+
+var CollapsibleTitle = TiptapNode ? TiptapNode.create({
+  name: "collapsibleTitle",
+  content: "inline*",
+  defining: true,
+  parseHTML: function() {
+    return [{
+      tag: "div.note-collapse-head",
+      getContent: function(el, schema) {
+        var ts = el.querySelector(".note-collapse-title");
+        if (ts) {
+          var frag = schema.nodeFromJSON({ type: "collapsibleTitle", content: [{ type: "text", text: ts.textContent || "Section" }] });
+          return frag.content;
+        }
+        return null;
+      },
+    }];
+  },
+  renderHTML: function(p) {
+    return ["div", { class: "note-collapse-head" },
+      ["span", { class: "note-collapse-arrow" }, "\u25B6"],
+      ["span", mergeAttributes(p.HTMLAttributes, { class: "note-collapse-title" }), 0],
+      ["button", { class: "note-collapse-del", contenteditable: "false", title: "Remove section" }, "\u00D7"],
+    ];
+  },
+}) : null;
+
+var CollapsibleBody = TiptapNode ? TiptapNode.create({
+  name: "collapsibleBody",
+  content: "block+",
+  defining: true,
+  parseHTML: function() { return [{ tag: "div.note-collapse-body" }]; },
+  renderHTML: function(p) {
+    return ["div", mergeAttributes(p.HTMLAttributes, { class: "note-collapse-body" }), 0];
+  },
+}) : null;
+
+var CollapsibleNode = TiptapNode ? TiptapNode.create({
+  name: "collapsible",
+  group: "block",
+  content: "collapsibleTitle collapsibleBody",
+  defining: true,
+  addAttributes: function() {
+    return {
+      open: {
+        default: false,
+        parseHTML: function(el) { return el.hasAttribute("data-open"); },
+        renderHTML: function(attrs) { return attrs.open ? { "data-open": "" } : {}; },
+      },
+    };
+  },
+  parseHTML: function() { return [{ tag: "div.note-collapse" }]; },
+  renderHTML: function(p) {
+    return ["div", mergeAttributes(p.HTMLAttributes, { class: "note-collapse" }), 0];
+  },
+}) : null;
+
+var FontSizeMark = TiptapMark ? TiptapMark.create({
+  name: "fontSize",
+  addAttributes: function() {
+    return {
+      size: {
+        default: null,
+        parseHTML: function(el) { return el.style.fontSize || null; },
+        renderHTML: function(attrs) { return attrs.size ? { style: "font-size:" + attrs.size } : {}; },
+      },
+    };
+  },
+  parseHTML: function() {
+    return [{ tag: "span", getAttrs: function(el) { return el.style.fontSize ? {} : false; } }];
+  },
+  renderHTML: function(p) {
+    return ["span", mergeAttributes(p.HTMLAttributes), 0];
+  },
+}) : null;
+
+var LegacyFontColor = TiptapExtension ? TiptapExtension.create({
+  name: "legacyFontColor",
+  addGlobalAttributes: function() {
+    return [{
+      types: ["textStyle"],
+      attributes: {
+        color: {
+          parseHTML: function(el) {
+            if (el.tagName === "FONT" && el.getAttribute("color")) return el.getAttribute("color");
+            return null;
+          },
+          renderHTML: function(attrs) {
+            if (!attrs.color) return {};
+            return { style: "color:" + attrs.color };
+          },
+        },
+      },
+    }];
+  },
+  addParsing: function() { return []; },
+}) : null;
+
+var TIPTAP_BASE_EXTENSIONS = (function() {
+  if (!TiptapDoc) return [];
+  return [
+    TiptapDoc,
+    TiptapParagraph,
+    TiptapText,
+    TiptapBold,
+    TiptapItalic,
+    TiptapUnderline,
+    TiptapHeading.configure({ levels: [1, 2, 3] }),
+    TiptapBulletList,
+    TiptapOrderedList,
+    TiptapListItem,
+    TiptapHardBreak,
+    TiptapHistory,
+    TiptapDropcursor.configure({ color: "#C8A86B" }),
+    TiptapGapcursor,
+    TiptapTextStyle,
+    TiptapColor,
+    TiptapFontFamily,
+    FontSizeMark,
+    CalloutNode,
+    CollapsibleNode,
+    CollapsibleTitle,
+    CollapsibleBody,
+    DateChipNode,
+    TaskChipNode,
+    NoteImageNode,
+  ];
+})();
+
+function restoreNoteImages(domEl) {
+  if (!domEl) return;
+  domEl.querySelectorAll("img[data-path]").forEach(function(img) {
+    try {
+      if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) {
+        img.src = window.__TAURI__.core.convertFileSrc(img.dataset.path);
+      }
+    } catch(e) {}
+  });
+}
 

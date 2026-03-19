@@ -531,6 +531,17 @@ function App() {
         .add-btn:hover{background:#EBE4D8!important;border-color:#9B8E80!important;}
         .nav-p{padding:6px 13px;border-radius:8px;border:none;font-size:12px;font-weight:600;transition:all 0.18s;}
         .dz-active{outline:2px dashed #8B7D6B!important;outline-offset:3px;}
+        .ProseMirror{outline:none;}
+        .ProseMirror p.is-editor-empty:first-child::before{content:attr(data-placeholder);float:left;color:#C2B49E;pointer-events:none;height:0;font-style:italic;}
+        .ProseMirror h1{font-family:"Playfair Display",serif;font-size:26px;font-weight:700;margin:12px 0 6px;color:#1C1714;}
+        .ProseMirror h2{font-family:"Playfair Display",serif;font-size:20px;font-weight:700;margin:10px 0 4px;color:#1C1714;}
+        .ProseMirror h3{font-family:"Playfair Display",serif;font-size:16px;font-weight:700;margin:8px 0 4px;color:#1C1714;}
+        .ProseMirror ol{margin:4px 0 4px 20px;padding:0;list-style-type:decimal;}
+        .ProseMirror ol ol{margin-left:20px;}
+        .ProseMirror ol li{margin:2px 0;line-height:1.65;}
+        .slash-menu{position:fixed;background:#FDFAF6;border:1.5px solid #E3D9CC;border-radius:9px;padding:4px;min-width:200px;max-height:280px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.13);z-index:200;}
+        .slash-menu button{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border:none;background:transparent;border-radius:6px;font-size:12px;color:#1C1714;cursor:pointer;text-align:left;font-family:inherit;}
+        .slash-menu button:hover,.slash-menu button.active{background:#EBE4D8;}
         .note-editor{outline:none;}
         .note-editor p{margin:0 0 4px;line-height:1.65;}
         .note-editor ul{margin:4px 0 4px 20px;padding:0;}

@@ -225,43 +225,63 @@ function TaskPanel({taskId,tasks,allNotes,byId,updateTask,completeTask}) {
 }
 
 function NotePanel({noteId,allNotes,tasks,byId}) {
-  const {navigateTo,navigateToDate,setView}=React.useContext(NavCtx)||{};
-  const note=allNotes.find(n=>n.id===noteId);
-  const contentRef=React.useRef(null);
+  var navCtx=React.useContext(NavCtx)||{};
+  var navigateTo=navCtx.navigateTo;
+  var navigateToDate=navCtx.navigateToDate;
+  var setView=navCtx.setView;
+  var note=allNotes.find(function(n){return n.id===noteId;});
 
-  useEffect(()=>{
-    if(!contentRef.current||!note) return;
-    contentRef.current.innerHTML=note.content||"<p><br></p>";
-    contentRef.current.querySelectorAll("img[data-path]").forEach(img=>{
-      try{ if(window.__TAURI__?.core?.convertFileSrc) img.src=window.__TAURI__.core.convertFileSrc(img.dataset.path); }catch(e){}
-    });
-  },[note?.id]);
+  var readOnlyExts = useMemo(function() {
+    return TIPTAP_BASE_EXTENSIONS.slice();
+  }, []);
+
+  var panelEditor = useEditor({
+    extensions: readOnlyExts,
+    content: note ? (note.content || "<p></p>") : "<p></p>",
+    editable: false,
+    editorProps: {
+      attributes: { class: "note-editor", style: "font-size:13px;color:#1C1714;line-height:1.65;outline:none;" },
+      handleClick: function(view, pos, event) {
+        var dateChip = event.target.closest(".note-date-chip");
+        if (dateChip && dateChip.dataset.date) { if (navigateToDate) navigateToDate(dateChip.dataset.date); return true; }
+        var taskChip = event.target.closest(".note-task-chip");
+        if (taskChip && taskChip.dataset.taskId) { if (navigateTo) navigateTo({type:"task",id:taskChip.dataset.taskId}); return true; }
+        var head = event.target.closest(".note-collapse-head");
+        if (head) { var col = head.closest(".note-collapse"); if (col) col.toggleAttribute("data-open"); return true; }
+        return false;
+      },
+    },
+    immediatelyRender: false,
+  });
+
+  useEffect(function() {
+    if (!panelEditor || !note) return;
+    panelEditor.commands.setContent(note.content || "<p></p>");
+    setTimeout(function() { restoreNoteImages(panelEditor.view.dom); }, 50);
+  }, [note ? note.id : null, note ? note.content : null]);
+
+  // Initial image restore
+  useEffect(function() {
+    if (!panelEditor) return;
+    var timer = setTimeout(function() { restoreNoteImages(panelEditor.view.dom); }, 50);
+    return function() { clearTimeout(timer); };
+  }, [panelEditor]);
 
   if(!note) return <div style={{padding:24,color:"#9B8E80",fontSize:13}}>Note not found.</div>;
-
-  function handleContentClick(e){
-    const dateChip=e.target.closest(".note-date-chip");
-    if(dateChip&&dateChip.dataset.date){ navigateToDate?.(dateChip.dataset.date); return; }
-    const taskChip=e.target.closest(".note-task-chip");
-    if(taskChip&&taskChip.dataset.taskId){ navigateTo?.({type:"task",id:taskChip.dataset.taskId}); return; }
-    const head=e.target.closest(".note-collapse-head");
-    if(head){ const col=head.closest(".note-collapse"); if(col) col.toggleAttribute("data-open"); }
-  }
 
   return (
     <div style={{padding:"22px 24px"}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:8}}>
         <h2 style={{fontFamily:'"Playfair Display",serif',fontSize:20,fontWeight:700,color:"#1C1714",flex:1}}>{note.title||"Untitled"}</h2>
-        <button onClick={()=>{ setView?.("notes"); }}
+        <button onClick={function(){ if(setView) setView("notes"); }}
           style={{...S.btnMicro,background:"#F3EDE3",color:"#4A3F30",whiteSpace:"nowrap",flexShrink:0}}>Go to note &#x2192;</button>
       </div>
       {(note.tags||[]).length>0&&(
         <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:14}}>
-          {(note.tags||[]).map(t=>(<span key={t} style={{background:"#EBE4D8",color:"#4A3F30",borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:600}}>#{t}</span>))}
+          {(note.tags||[]).map(function(t){return <span key={t} style={{background:"#EBE4D8",color:"#4A3F30",borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:600}}>#{t}</span>;})}
         </div>
       )}
-      <div ref={contentRef} className="note-editor" onClick={handleContentClick}
-        style={{fontSize:13,color:"#1C1714",lineHeight:1.65,outline:"none"}}/>
+      {panelEditor ? <EditorContent editor={panelEditor}/> : <div style={{fontSize:13,color:"#C2B49E"}}>Loading\u2026</div>}
     </div>
   );
 }
