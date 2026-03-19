@@ -810,244 +810,354 @@ function NotesView({sections,byId,getSectionNotes,addNote,updateNoteField,delete
 // ─── Note Editor ──────────────────────────────────────────────────────────────
 
 function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,onFocusTitleDone,tasks,setView,secId,updateNoteField,allTags}) {
-  const {navigateTo:navTo,navigateToDate}=React.useContext(NavCtx)||{};
-  const editorRef    =useRef(null);
-  const titleRef     =useRef(null);
-  const saveTimer    =useRef(null);
-  const titleTimer   =useRef(null);
-  const [saved,        setSaved]        =useState(true);
-  const [titleVal,     setTitleVal]     =useState(note.title||"");
-  const [selColor,     setSelColor]     =useState("#1C1714");
-  const [showClr,      setShowClr]      =useState(false);
-  const [fmtState,     setFmtState]     =useState({bold:false,italic:false,underline:false});
-  const [tagInput,     setTagInput]     =useState("");
-  const [showTagInput, setShowTagInput] =useState(false);
-  const [remindAt,     setRemindAt]     =useState(note.remindAt||"");
-  const [taskSearch,   setTaskSearch]   =useState("");
-  const [showTaskPick, setShowTaskPick] =useState(false);
-  const [showDatePick, setShowDatePick] =useState(false);
-  const [datePickVal,  setDatePickVal]  =useState(todayISO());
-  const tags=note.tags||[];
-  const filteredTasks=(tasks||[]).filter(t=>t.type!=="spacer"&&t.status!=="done"&&
+  var navCtx=React.useContext(NavCtx)||{};
+  var navTo=navCtx.navigateTo;
+  var navigateToDate=navCtx.navigateToDate;
+  var titleRef     =useRef(null);
+  var saveTimer    =useRef(null);
+  var titleTimer   =useRef(null);
+  var [saved,        setSaved]        =useState(true);
+  var [titleVal,     setTitleVal]     =useState(note.title||"");
+  var [selColor,     setSelColor]     =useState("#1C1714");
+  var [showClr,      setShowClr]      =useState(false);
+  var [fmtState,     setFmtState]     =useState({bold:false,italic:false,underline:false,heading:0,bulletList:false,orderedList:false});
+  var [tagInput,     setTagInput]     =useState("");
+  var [showTagInput, setShowTagInput] =useState(false);
+  var [remindAt,     setRemindAt]     =useState(note.remindAt||"");
+  var [taskSearch,   setTaskSearch]   =useState("");
+  var [showTaskPick, setShowTaskPick] =useState(false);
+  var [showDatePick, setShowDatePick] =useState(false);
+  var [datePickVal,  setDatePickVal]  =useState(todayISO());
+  var [slashOpen,    setSlashOpen]    =useState(false);
+  var [slashPos,     setSlashPos]     =useState(null);
+  var [slashQuery,   setSlashQuery]   =useState("");
+  var [slashIdx,     setSlashIdx]     =useState(0);
+  var slashRange     =useRef(null);
+  var tags=note.tags||[];
+  var filteredTasks=(tasks||[]).filter(function(t){ return t.type!=="spacer"&&t.status!=="done"&&
     !(note.linkedTaskIds||[]).includes(t.id)&&
-    (!taskSearch||t.title.toLowerCase().includes(taskSearch.toLowerCase()))
-  ).slice(0,10);
+    (!taskSearch||t.title.toLowerCase().includes(taskSearch.toLowerCase()));
+  }).slice(0,10);
 
-  // Load content and resolve any stored image paths via convertFileSrc
-  useEffect(()=>{
-    if(editorRef.current){
-      editorRef.current.innerHTML=note.content||"<p><br></p>";
-      editorRef.current.querySelectorAll("img[data-path]").forEach(img=>{
-        try{ if(window.__TAURI__?.core?.convertFileSrc) img.src=window.__TAURI__.core.convertFileSrc(img.dataset.path); }catch(e){}
+  var editorExtensions = useMemo(function() {
+    if (!TiptapPlaceholder) return [];
+    return TIPTAP_BASE_EXTENSIONS.concat([
+      TiptapPlaceholder.configure({ placeholder: "Start writing, or type / for commands\u2026" }),
+    ]);
+  }, []);
+
+  var editor = useEditor({
+    extensions: editorExtensions,
+    content: note.content || "<p></p>",
+    onUpdate: function(ctx) {
+      setSaved(false);
+      clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(function() {
+        onContentChange(ctx.editor.getHTML());
+        setSaved(true);
+      }, 500);
+    },
+    onSelectionUpdate: function(ctx) {
+      setFmtState({
+        bold: ctx.editor.isActive("bold"),
+        italic: ctx.editor.isActive("italic"),
+        underline: ctx.editor.isActive("underline"),
+        heading: ctx.editor.isActive("heading", {level:1}) ? 1 : ctx.editor.isActive("heading", {level:2}) ? 2 : ctx.editor.isActive("heading", {level:3}) ? 3 : 0,
+        bulletList: ctx.editor.isActive("bulletList"),
+        orderedList: ctx.editor.isActive("orderedList"),
       });
+    },
+    editorProps: {
+      attributes: { class: "note-editor", style: "padding:20px 24px;font-family:\"DM Sans\",sans-serif;font-size:13px;color:#1C1714;line-height:1.65;outline:none;flex:1;overflow-y:auto;" },
+      handleClick: function(view, pos, event) {
+        setShowClr(false); setShowTaskPick(false); setShowDatePick(false);
+        var dateChip = event.target.closest(".note-date-chip");
+        if (dateChip && dateChip.dataset.date) { if (navigateToDate) navigateToDate(dateChip.dataset.date); return true; }
+        var taskChip = event.target.closest(".note-task-chip");
+        if (taskChip && taskChip.dataset.taskId) { if (navTo) navTo({type:"task",id:taskChip.dataset.taskId}); return true; }
+        var delBtn = event.target.closest(".note-collapse-del");
+        if (delBtn) {
+          var colNode = event.target.closest(".note-collapse");
+          if (colNode) {
+            var domPos = view.posAtDOM(colNode, 0);
+            var resolved = view.state.doc.resolve(domPos);
+            var nodePos = resolved.before(resolved.depth);
+            view.dispatch(view.state.tr.delete(nodePos, nodePos + view.state.doc.nodeAt(nodePos).nodeSize));
+          }
+          return true;
+        }
+        var head = event.target.closest(".note-collapse-head");
+        if (head) { var col = head.closest(".note-collapse"); if (col) col.toggleAttribute("data-open"); return true; }
+        return false;
+      },
+      handleKeyDown: function(view, event) {
+        // Slash command handling
+        if (slashOpen) {
+          if (event.key === "Escape") { setSlashOpen(false); slashRange.current = null; return true; }
+          if (event.key === "ArrowDown") { event.preventDefault(); setSlashIdx(function(i) { return (i + 1) % slashFiltered.length; }); return true; }
+          if (event.key === "ArrowUp") { event.preventDefault(); setSlashIdx(function(i) { return (i - 1 + slashFiltered.length) % slashFiltered.length; }); return true; }
+          if (event.key === "Enter" || event.key === "Tab") { event.preventDefault(); executeSlashCommand(slashFiltered[slashIdx]); return true; }
+          if (event.key === "Backspace") {
+            if (slashQuery.length === 0) { setSlashOpen(false); slashRange.current = null; }
+          }
+        }
+        if (event.key === "/" && !slashOpen) {
+          var sel = view.state.selection;
+          var textBefore = view.state.doc.textBetween(Math.max(0, sel.from - 1), sel.from, " ");
+          if (sel.from === 1 || textBefore === " " || textBefore === "\n" || textBefore === "") {
+            setTimeout(function() {
+              setSlashOpen(true);
+              setSlashQuery("");
+              setSlashIdx(0);
+              slashRange.current = { from: sel.from, to: sel.from };
+              var coords = view.coordsAtPos(sel.from);
+              setSlashPos({ top: coords.bottom + 4, left: coords.left });
+            }, 0);
+          }
+        }
+        return false;
+      },
+      handleTextInput: function(view, from, to, text) {
+        if (slashOpen) {
+          setTimeout(function() {
+            var sr = slashRange.current;
+            if (!sr) return;
+            var newText = view.state.doc.textBetween(sr.from, view.state.selection.from, "");
+            setSlashQuery(newText);
+            setSlashIdx(0);
+          }, 0);
+        }
+        return false;
+      },
+    },
+    immediatelyRender: false,
+  });
+
+  // Restore image srcs after editor mounts
+  useEffect(function() {
+    if (!editor) return;
+    var timer = setTimeout(function() {
+      restoreNoteImages(editor.view.dom);
+    }, 50);
+    return function() { clearTimeout(timer); };
+  }, [editor]);
+
+  useEffect(function() { if(focusTitle&&titleRef.current){ titleRef.current.focus(); titleRef.current.select(); if (onFocusTitleDone) onFocusTitleDone(); } },[focusTitle]);
+
+  // Slash command items
+  var SLASH_ITEMS = [
+    { id:"h1", label:"Heading 1", icon:"\u0048\u2081", run: function(ed) { ed.chain().focus().toggleHeading({level:1}).run(); } },
+    { id:"h2", label:"Heading 2", icon:"\u0048\u2082", run: function(ed) { ed.chain().focus().toggleHeading({level:2}).run(); } },
+    { id:"h3", label:"Heading 3", icon:"\u0048\u2083", run: function(ed) { ed.chain().focus().toggleHeading({level:3}).run(); } },
+    { id:"bullet", label:"Bullet List", icon:"\u2022", run: function(ed) { ed.chain().focus().toggleBulletList().run(); } },
+    { id:"ordered", label:"Numbered List", icon:"1.", run: function(ed) { ed.chain().focus().toggleOrderedList().run(); } },
+    { id:"callout", label:"Callout", icon:"\uD83D\uDCA1", run: function(ed) { ed.chain().focus().insertContent({type:"callout",content:[{type:"text",text:"Callout text\u2026"}]}).run(); } },
+    { id:"collapse", label:"Collapsible", icon:"\u25B6", run: function(ed) { ed.chain().focus().insertContent({type:"collapsible",content:[{type:"collapsibleTitle",content:[{type:"text",text:"Section title"}]},{type:"collapsibleBody",content:[{type:"paragraph",content:[{type:"text",text:"Content here\u2026"}]}]}]}).run(); } },
+    { id:"date", label:"Date", icon:"\uD83D\uDCC5", run: "date" },
+    { id:"task", label:"Task Link", icon:"\uD83D\uDCCC", run: "task" },
+    { id:"image", label:"Image", icon:"\uD83D\uDDBC", run: "image" },
+  ];
+  var slashFiltered = SLASH_ITEMS.filter(function(item) {
+    return !slashQuery || item.label.toLowerCase().includes(slashQuery.toLowerCase());
+  });
+
+  function executeSlashCommand(item) {
+    if (!item || !editor) return;
+    // Delete the slash and query text
+    var sr = slashRange.current;
+    if (sr) {
+      editor.chain().focus().deleteRange({ from: sr.from, to: editor.state.selection.from }).run();
     }
-  },[]);
-  useEffect(()=>{ if(focusTitle&&titleRef.current){ titleRef.current.focus(); titleRef.current.select(); onFocusTitleDone?.(); } },[focusTitle]);
+    setSlashOpen(false);
+    slashRange.current = null;
 
-  // Strip runtime-only state before saving: image srcs (keep data-path), revealed spoiler class
-  function getCleanHTML(){
-    if(!editorRef.current) return "";
-    const clone=editorRef.current.cloneNode(true);
-    clone.querySelectorAll("img[data-path]").forEach(img=>img.removeAttribute("src"));
-    clone.querySelectorAll(".note-collapse").forEach(el=>el.removeAttribute("data-open"));
-    return clone.innerHTML;
+    if (typeof item.run === "function") {
+      item.run(editor);
+    } else if (item.run === "date") {
+      setShowDatePick(true);
+    } else if (item.run === "task") {
+      setShowTaskPick(true);
+    } else if (item.run === "image") {
+      doInsertImage();
+    }
   }
-  const schedSave=()=>{ setSaved(false); clearTimeout(saveTimer.current); saveTimer.current=setTimeout(()=>{ onContentChange(getCleanHTML()); setSaved(true); },500); };
-  const schedTitleSave=v=>{ setSaved(false); clearTimeout(titleTimer.current); titleTimer.current=setTimeout(()=>{ onTitleChange(v); setSaved(true); },400); };
-  const refreshFmt=()=>setFmtState({bold:document.queryCommandState("bold"),italic:document.queryCommandState("italic"),underline:document.queryCommandState("underline")});
-  const cmd=(command,value=null)=>{ editorRef.current?.focus(); document.execCommand(command,false,value); refreshFmt(); schedSave(); };
 
-  function insertAtCursor(html){ editorRef.current?.focus(); document.execCommand("insertHTML",false,html); schedSave(); }
-  function wrapSelection(styleProp,styleVal){
-    const sel=window.getSelection(); if(!sel||sel.rangeCount===0||sel.isCollapsed) return;
-    const range=sel.getRangeAt(0); const span=document.createElement("span"); span.style[styleProp]=styleVal;
-    try{ range.surroundContents(span); }catch{ const frag=range.extractContents(); span.appendChild(frag); range.insertNode(span); }
-    sel.removeAllRanges(); schedSave();
-  }
-  function insertCallout(){
-    const sel=window.getSelection(); const text=sel&&!sel.isCollapsed?sel.toString():"";
-    if(sel&&!sel.isCollapsed) document.execCommand("delete");
-    insertAtCursor('<div class="note-callout">&#x1F4A1; '+(text||"Callout text\u2026")+'</div><p><br></p>');
-  }
-  function insertCollapse(){
-    const sel=window.getSelection(); const text=sel&&!sel.isCollapsed?sel.toString():"";
-    if(sel&&!sel.isCollapsed) document.execCommand("delete");
-    // Insert a paragraph break first so the block is never mid-line
-    document.execCommand("insertParagraph");
-    insertAtCursor('<div class="note-collapse" contenteditable="false"><div class="note-collapse-head"><span class="note-collapse-arrow">&#9658;</span><span class="note-collapse-title" contenteditable="true">Section title</span><button class="note-collapse-del" contenteditable="false" title="Remove section">&#xd7;</button></div><div class="note-collapse-body" contenteditable="true">'+(text||"Content here…")+'</div></div><p><br></p>');
-  }
-  function insertDateChip(date){
-    const label=new Date(date+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
-    insertAtCursor('<span class="note-date-chip" data-date="'+date+'" contenteditable="false">&#x1F4C5; '+label+'</span> ');
+  var schedTitleSave = function(v) { setSaved(false); clearTimeout(titleTimer.current); titleTimer.current=setTimeout(function(){ onTitleChange(v); setSaved(true); },400); };
+
+  function insertDateChip(date) {
+    if (!editor) return;
+    editor.chain().focus().insertContent({ type: "dateChip", attrs: { date: date } }).run();
     setShowDatePick(false);
   }
-  function insertTaskChip(task){
-    const snapshot=task.title.replace(/"/g,"&quot;");
-    insertAtCursor('<span class="note-task-chip" data-task-id="'+task.id+'" data-snapshot="'+snapshot+'" contenteditable="false">&#x1F4CC; '+task.title+'</span>\u00a0');
-    updateNoteField?.(secId,note.id,{linkedTaskIds:[...(note.linkedTaskIds||[]),task.id]});
+  function insertTaskChip(task) {
+    if (!editor) return;
+    editor.chain().focus().insertContent({ type: "taskChip", attrs: { taskId: task.id, snapshot: task.title } }).run();
+    if (updateNoteField) updateNoteField(secId, note.id, {linkedTaskIds: (note.linkedTaskIds||[]).concat([task.id])});
     setTaskSearch(""); setShowTaskPick(false);
   }
-  async function insertImage(){
-    try{
-      const path=await window.__TAURI__?.dialog?.open({filters:[{name:"Images",extensions:["png","jpg","jpeg","gif","webp","svg"]}],multiple:false});
-      if(!path) return;
-      let src=""; try{ src=window.__TAURI__.core.convertFileSrc(path); }catch(e){}
-      insertAtCursor('<img data-path="'+path+'" src="'+src+'" class="note-img" alt=""/><p><br></p>');
-    }catch(e){}
+  function doInsertImage() {
+    if (!window.__TAURI__ || !window.__TAURI__.dialog) return;
+    window.__TAURI__.dialog.open({filters:[{name:"Images",extensions:["png","jpg","jpeg","gif","webp","svg"]}],multiple:false}).then(function(path) {
+      if (!path || !editor) return;
+      editor.chain().focus().insertContent({ type: "noteImage", attrs: { path: path } }).run();
+      // Restore the image src after insert
+      setTimeout(function() { restoreNoteImages(editor.view.dom); }, 50);
+    }).catch(function() {});
   }
-  function addTag(tag){
-    const t=tag.trim().toLowerCase().replace(/\s+/g,"-");
-    if(!t||tags.includes(t)) return;
-    updateNoteField?.(secId,note.id,{tags:[...tags,t]});
+  function addTag(tag) {
+    var t = tag.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!t || tags.includes(t)) return;
+    if (updateNoteField) updateNoteField(secId, note.id, {tags: tags.concat([t])});
     setTagInput(""); setShowTagInput(false);
   }
-  function removeTag(tag){ updateNoteField?.(secId,note.id,{tags:tags.filter(t=>t!==tag)}); }
+  function removeTag(tag) { if (updateNoteField) updateNoteField(secId, note.id, {tags: tags.filter(function(t){return t!==tag;})}); }
 
-  const caretToEnd=el=>{ const r=document.createRange(); r.selectNodeContents(el); r.collapse(false); const s=window.getSelection(); s.removeAllRanges(); s.addRange(r); };
-  const currentLi=()=>{ const sel=window.getSelection(); if(!sel||sel.rangeCount===0) return null; let node=sel.anchorNode; if(node.nodeType===3) node=node.parentElement; return node?.closest("li")||null; };
-  const caretAtLineStart=()=>{ const sel=window.getSelection(); if(!sel||sel.rangeCount===0) return false; const range=sel.getRangeAt(0); return range.collapsed&&range.startOffset===0; };
-  const handleKeyDown=e=>{
-    if(e.key==="Tab"){ e.preventDefault(); const li=currentLi(); if(li){ if(e.shiftKey) cmd("outdent"); else cmd("indent"); requestAnimationFrame(()=>{ const newLi=currentLi(); if(newLi) caretToEnd(newLi); }); } return; }
-    if(e.key==="Backspace"){ const li=currentLi(); if(li&&caretAtLineStart()){ const parentUl=li.parentElement; const isNested=parentUl?.parentElement?.tagName==="LI"; if(isNested){ e.preventDefault(); cmd("outdent"); return; } } }
-    if(showClr) setShowClr(false);
-    if(showTaskPick) setShowTaskPick(false);
-  };
-  const applyColor=v=>{ setSelColor(v); cmd("foreColor",v); setShowClr(false); };
-  const sep=<div style={{width:1,height:18,background:"#D6CEC3",flexShrink:0,margin:"0 2px"}}/>;
+  var applyColor = function(v) { setSelColor(v); if (editor) editor.chain().focus().setColor(v).run(); setShowClr(false); };
+  var sep = <div style={{width:1,height:18,background:"#D6CEC3",flexShrink:0,margin:"0 2px"}}/>;
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
       {/* Title + tags */}
       <div style={{padding:"16px 24px 0",borderBottom:"1px solid #EBE4D8",flexShrink:0}}>
-        <input ref={titleRef} value={titleVal} onChange={e=>{setTitleVal(e.target.value);schedTitleSave(e.target.value);}} onKeyDown={e=>e.key==="Enter"&&e.currentTarget.blur()} placeholder="Note title\u2026"
+        <input ref={titleRef} value={titleVal} onChange={function(e){setTitleVal(e.target.value);schedTitleSave(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter") e.currentTarget.blur();}} placeholder="Note title\u2026"
           style={{...S.input,marginBottom:0,border:"none",background:"transparent",fontSize:17,fontWeight:700,fontFamily:'"Playfair Display",serif',padding:"0 0 8px",borderRadius:0}}/>
         <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap",paddingBottom:10,minHeight:28}}>
-          {tags.map(tag=>(
+          {tags.map(function(tag){return (
             <span key={tag} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#EBE4D8",color:"#4A3F30",borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:600}}>
               #{tag}
-              <button onClick={()=>removeTag(tag)} style={{background:"none",border:"none",cursor:"pointer",padding:"0 0 0 3px",fontSize:9,color:"#9B8E80",lineHeight:1}}>&#x2715;</button>
+              <button onClick={function(){removeTag(tag);}} style={{background:"none",border:"none",cursor:"pointer",padding:"0 0 0 3px",fontSize:9,color:"#9B8E80",lineHeight:1}}>&#x2715;</button>
             </span>
-          ))}
+          );})}
           {showTagInput?(
             <div style={{position:"relative",display:"inline-block"}}>
-              <input value={tagInput} onChange={e=>setTagInput(e.target.value)}
-                onKeyDown={e=>{ if(e.key==="Enter"&&tagInput.trim()) addTag(tagInput); if(e.key==="Escape") setShowTagInput(false); }}
-                onBlur={e=>{ if(!e.relatedTarget?.classList?.contains("tag-sug-item")){ if(tagInput.trim()) addTag(tagInput); else setShowTagInput(false); } }}
-                placeholder="tag-name…" autoFocus
+              <input value={tagInput} onChange={function(e){setTagInput(e.target.value);}}
+                onKeyDown={function(e){ if(e.key==="Enter"&&tagInput.trim()) addTag(tagInput); if(e.key==="Escape") setShowTagInput(false); }}
+                onBlur={function(e){ if(!e.relatedTarget||!e.relatedTarget.classList||!e.relatedTarget.classList.contains("tag-sug-item")){ if(tagInput.trim()) addTag(tagInput); else setShowTagInput(false); } }}
+                placeholder="tag-name\u2026" autoFocus
                 style={{...S.input,marginBottom:0,width:110,padding:"2px 8px",fontSize:11,display:"inline-block"}}/>
-              {(allTags||[]).filter(t=>!tags.includes(t)&&(!tagInput||t.includes(tagInput.toLowerCase()))).length>0&&(
+              {(allTags||[]).filter(function(t){return !tags.includes(t)&&(!tagInput||t.includes(tagInput.toLowerCase()));}).length>0&&(
                 <div style={{position:"absolute",top:"calc(100% + 3px)",left:0,zIndex:300,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:8,padding:"4px",minWidth:130,boxShadow:"0 4px 14px rgba(0,0,0,0.11)"}}>
-                  {(allTags||[]).filter(t=>!tags.includes(t)&&(!tagInput||t.includes(tagInput.toLowerCase()))).map(t=>(
+                  {(allTags||[]).filter(function(t){return !tags.includes(t)&&(!tagInput||t.includes(tagInput.toLowerCase()));}).map(function(t){return (
                     <div key={t} className="tag-sug-item" tabIndex={-1}
-                      onMouseDown={e=>{e.preventDefault();addTag(t);}}
+                      onMouseDown={function(e){e.preventDefault();addTag(t);}}
                       style={{padding:"4px 8px",borderRadius:5,cursor:"pointer",fontSize:11,fontWeight:600,color:"#4A3F30"}}
-                      onMouseEnter={e=>e.currentTarget.style.background="#EBE4D8"}
-                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      onMouseEnter={function(e){e.currentTarget.style.background="#EBE4D8";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
                       #{t}
                     </div>
-                  ))}
+                  );})}
                 </div>
               )}
             </div>
           ):(
-            <button onClick={()=>setShowTagInput(true)} style={{...S.btnMicro,fontSize:10,padding:"2px 7px",borderRadius:20,border:"1px dashed #C2B49E",background:"transparent",color:"#9B8E80"}}>+ tag</button>
+            <button onClick={function(){setShowTagInput(true);}} style={{...S.btnMicro,fontSize:10,padding:"2px 7px",borderRadius:20,border:"1px dashed #C2B49E",background:"transparent",color:"#9B8E80"}}>+ tag</button>
           )}
         </div>
         {/* Reminder */}
         <div style={{display:"flex",alignItems:"center",gap:8,paddingBottom:10}}>
           <span style={{fontSize:11,fontWeight:600,color:note.remindFired?"#1A7A43":"#7A6C5E",flexShrink:0}}>{note.remindFired?"Reminded":"Remind at"}</span>
           <input type="datetime-local" value={remindAt}
-            onChange={e=>{ const v=e.target.value||null; setRemindAt(v||""); updateNoteField?.(secId,note.id,{remindAt:v,remindFired:false}); }}
+            onChange={function(e){ var v=e.target.value||null; setRemindAt(v||""); if(updateNoteField) updateNoteField(secId,note.id,{remindAt:v,remindFired:false}); }}
             style={{...S.input,marginBottom:0,flex:1,padding:"3px 8px",fontSize:11,background:note.remindFired?"#EAF7EF":""}}/>
-          {remindAt&&<button onClick={()=>{ setRemindAt(""); updateNoteField?.(secId,note.id,{remindAt:null,remindFired:false}); }}
+          {remindAt&&<button onClick={function(){ setRemindAt(""); if(updateNoteField) updateNoteField(secId,note.id,{remindAt:null,remindFired:false}); }}
             style={{background:"none",border:"none",cursor:"pointer",color:"#C43A3A",fontSize:12,padding:0,flexShrink:0}}>&#xd7;</button>}
         </div>
       </div>
       {/* Toolbar */}
       <div style={{display:"flex",alignItems:"center",gap:3,padding:"7px 12px",background:"#F3EDE3",borderBottom:"1px solid #E3D9CC",flexWrap:"wrap",flexShrink:0}}>
-        <select className="tb-sel" defaultValue={EDITOR_FONTS[0].value} onChange={e=>wrapSelection("fontFamily",e.target.value)}>
-          {EDITOR_FONTS.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}
+        <select className="tb-sel" defaultValue={EDITOR_FONTS[0].value} onChange={function(e){ if(editor) editor.chain().focus().setFontFamily(e.target.value).run(); }}>
+          {EDITOR_FONTS.map(function(f){return <option key={f.value} value={f.value}>{f.label}</option>;})}
         </select>
-        <select className="tb-sel" defaultValue={EDITOR_SIZES[1].value} onChange={e=>wrapSelection("fontSize",e.target.value)}>
-          {EDITOR_SIZES.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+        <select className="tb-sel" defaultValue={EDITOR_SIZES[1].value} onChange={function(e){ if(editor) editor.chain().focus().setMark("fontSize",{size:e.target.value}).run(); }}>
+          {EDITOR_SIZES.map(function(s){return <option key={s.value} value={s.value}>{s.label}</option>;})}
         </select>
         {sep}
-        {[["bold","B",{fontWeight:700}],["italic","I",{fontStyle:"italic"}],["underline","U",{textDecoration:"underline"}]].map(([co,l,extra])=>(
-          <button key={co} className={`tb-btn${fmtState[co]?" on":""}`} onMouseDown={e=>{e.preventDefault();cmd(co);}} style={extra}>{l}</button>
-        ))}
+        <select className="tb-sel" value={fmtState.heading||""} onChange={function(e){ if(!editor) return; var v=parseInt(e.target.value); if(v) editor.chain().focus().toggleHeading({level:v}).run(); else editor.chain().focus().setParagraph().run(); }}>
+          <option value="">P</option>
+          <option value="1">H1</option>
+          <option value="2">H2</option>
+          <option value="3">H3</option>
+        </select>
         {sep}
-        <button className="tb-btn" onMouseDown={e=>{e.preventDefault();cmd("insertUnorderedList");}} style={{fontSize:13}}>&#x2022;</button>
+        {[["bold","B",{fontWeight:700}],["italic","I",{fontStyle:"italic"}],["underline","U",{textDecoration:"underline"}]].map(function(arr){
+          var co=arr[0], l=arr[1], extra=arr[2];
+          return <button key={co} className={"tb-btn"+(fmtState[co]?" on":"")} onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus()["toggle"+co.charAt(0).toUpperCase()+co.slice(1)]().run();}} style={extra}>{l}</button>;
+        })}
+        {sep}
+        <button className={"tb-btn"+(fmtState.bulletList?" on":"")} onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleBulletList().run();}} style={{fontSize:13}}>&#x2022;</button>
+        <button className={"tb-btn"+(fmtState.orderedList?" on":"")} onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleOrderedList().run();}} style={{fontSize:11}}>1.</button>
         {sep}
         <div style={{position:"relative"}}>
-          <button className="tb-btn" onMouseDown={e=>{e.preventDefault();setShowClr(v=>!v);}} style={{display:"flex",alignItems:"center",gap:4}}>
+          <button className="tb-btn" onMouseDown={function(e){e.preventDefault();setShowClr(function(v){return !v;});}} style={{display:"flex",alignItems:"center",gap:4}}>
             <span style={{fontSize:13,fontWeight:700,color:selColor}}>A</span>
             <span style={{display:"block",width:12,height:3,borderRadius:2,background:selColor}}/>
             <span style={{fontSize:8,color:"#9B8E80"}}>&#9662;</span>
           </button>
           {showClr&&(
-            <div onMouseDown={e=>e.preventDefault()} style={{position:"absolute",top:"110%",left:0,zIndex:50,background:"#FDFAF6",borderRadius:10,padding:"10px",border:"1px solid #E3D9CC",boxShadow:"0 8px 24px rgba(0,0,0,0.14)",minWidth:220}}>
+            <div onMouseDown={function(e){e.preventDefault();}} style={{position:"absolute",top:"110%",left:0,zIndex:50,background:"#FDFAF6",borderRadius:10,padding:"10px",border:"1px solid #E3D9CC",boxShadow:"0 8px 24px rgba(0,0,0,0.14)",minWidth:220}}>
               <ColorPicker value={selColor} onChange={applyColor} label="Text Colour"/>
             </div>
           )}
         </div>
         {sep}
-        <button className="tb-btn" title="Callout box" onMouseDown={e=>{e.preventDefault();insertCallout();}}>Callout</button>
-        <button className="tb-btn" title="Collapsible section" onMouseDown={e=>{e.preventDefault();insertCollapse();}}>Collapse</button>
+        <button className="tb-btn" title="Callout box" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().insertContent({type:"callout",content:[{type:"text",text:"Callout text\u2026"}]}).run();}}>Callout</button>
+        <button className="tb-btn" title="Collapsible section" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().insertContent({type:"collapsible",content:[{type:"collapsibleTitle",content:[{type:"text",text:"Section title"}]},{type:"collapsibleBody",content:[{type:"paragraph",content:[{type:"text",text:"Content here\u2026"}]}]}]}).run();}}>Collapse</button>
         <div style={{position:"relative"}}>
-          <button className="tb-btn" title="Insert date chip" onMouseDown={e=>{e.preventDefault();setShowDatePick(v=>!v);}}>Date</button>
+          <button className="tb-btn" title="Insert date chip" onMouseDown={function(e){e.preventDefault();setShowDatePick(function(v){return !v;});}}>Date</button>
           {showDatePick&&(
-            <div onMouseDown={e=>e.preventDefault()} style={{position:"absolute",top:"110%",left:0,zIndex:100,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:9,padding:"10px",minWidth:200,boxShadow:"0 4px 16px rgba(0,0,0,0.13)"}}>
+            <div onMouseDown={function(e){e.preventDefault();}} style={{position:"absolute",top:"110%",left:0,zIndex:100,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:9,padding:"10px",minWidth:200,boxShadow:"0 4px 16px rgba(0,0,0,0.13)"}}>
               <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Insert Date</div>
-              <button onMouseDown={()=>insertDateChip(todayISO())} style={{...S.btnMicro,width:"100%",marginBottom:8,textAlign:"left"}}>Today ({new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short"})})</button>
-              <input type="date" value={datePickVal} onChange={e=>setDatePickVal(e.target.value)}
+              <button onMouseDown={function(){insertDateChip(todayISO());}} style={{...S.btnMicro,width:"100%",marginBottom:8,textAlign:"left"}}>Today ({new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short"})})</button>
+              <input type="date" value={datePickVal} onChange={function(e){setDatePickVal(e.target.value);}}
                 style={{...S.input,marginBottom:8,padding:"4px 8px",fontSize:11}}/>
-              <button onMouseDown={()=>insertDateChip(datePickVal)} style={{...S.btnDark,width:"100%",fontSize:12,padding:"5px 0"}}>Insert</button>
+              <button onMouseDown={function(){insertDateChip(datePickVal);}} style={{...S.btnDark,width:"100%",fontSize:12,padding:"5px 0"}}>Insert</button>
             </div>
           )}
         </div>
         {sep}
         <div style={{position:"relative"}}>
-          <button className="tb-btn" title="Link a task" onMouseDown={e=>{e.preventDefault();setShowTaskPick(v=>!v);}}>Task</button>
+          <button className="tb-btn" title="Link a task" onMouseDown={function(e){e.preventDefault();setShowTaskPick(function(v){return !v;});}}>Task</button>
           {showTaskPick&&(
-            <div onMouseDown={e=>e.preventDefault()} style={{position:"absolute",top:"110%",left:0,zIndex:100,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:9,padding:8,minWidth:230,maxHeight:230,overflowY:"auto",boxShadow:"0 4px 16px rgba(0,0,0,0.13)"}}>
-              <input value={taskSearch} onChange={e=>setTaskSearch(e.target.value)} placeholder="Search tasks\u2026"
+            <div onMouseDown={function(e){e.preventDefault();}} style={{position:"absolute",top:"110%",left:0,zIndex:100,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:9,padding:8,minWidth:230,maxHeight:230,overflowY:"auto",boxShadow:"0 4px 16px rgba(0,0,0,0.13)"}}>
+              <input value={taskSearch} onChange={function(e){setTaskSearch(e.target.value);}} placeholder="Search tasks\u2026"
                 style={{...S.input,marginBottom:6,padding:"5px 8px",fontSize:11}}/>
               {filteredTasks.length===0&&<div style={{fontSize:11,color:"#9B8E80",padding:"4px 2px"}}>No tasks found.</div>}
-              {filteredTasks.map(t=>(
-                <div key={t.id} onMouseDown={()=>insertTaskChip(t)}
+              {filteredTasks.map(function(t){return (
+                <div key={t.id} onMouseDown={function(){insertTaskChip(t);}}
                   style={{fontSize:12,padding:"5px 8px",borderRadius:6,cursor:"pointer",color:"#1C1714",display:"flex",alignItems:"center",gap:6}}
-                  onMouseEnter={e=>e.currentTarget.style.background="#EBE4D8"}
-                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  onMouseEnter={function(e){e.currentTarget.style.background="#EBE4D8";}}
+                  onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
                   <span style={{fontSize:10,background:"#EBE4D8",borderRadius:4,padding:"1px 5px",color:"#6B5E4E",flexShrink:0}}>{t.status}</span>
                   <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</span>
                 </div>
-              ))}
+              );})}
             </div>
           )}
         </div>
-        <button className="tb-btn" title="Insert image (file reference)" onMouseDown={e=>{e.preventDefault();insertImage();}}>Image</button>
+        <button className="tb-btn" title="Insert image (file reference)" onMouseDown={function(e){e.preventDefault();doInsertImage();}}>Image</button>
         {sep}
-        <button className="tb-btn" onMouseDown={e=>{e.preventDefault();cmd("removeFormat");}} style={{fontSize:11,color:"#9B8E80"}}>&#x2715; fmt</button>
+        <button className="tb-btn" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().unsetAllMarks().run();}} style={{fontSize:11,color:"#9B8E80"}}>&#x2715; fmt</button>
+        {sep}
+        <button className="tb-btn" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().undo().run();}} title="Undo (Ctrl+Z)" style={{fontSize:12}}>&#x21A9;</button>
+        <button className="tb-btn" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().redo().run();}} title="Redo (Ctrl+Shift+Z)" style={{fontSize:12}}>&#x21AA;</button>
         <div style={{marginLeft:"auto",fontSize:11,color:saved?"#1A7A43":"#9B8E80",fontWeight:500}}>{saved?"\u2713 Saved":"Saving\u2026"}</div>
       </div>
       {/* Content */}
-      <div ref={editorRef} className="note-editor" contentEditable suppressContentEditableWarning
-        onInput={schedSave} onKeyDown={handleKeyDown} onKeyUp={refreshFmt} onMouseUp={refreshFmt}
-        onClick={e=>{
-          setShowClr(false); setShowTaskPick(false); setShowDatePick(false);
-          if(e.target.classList.contains("note-collapse-del")){
-            const col=e.target.closest(".note-collapse"); if(col){col.remove();schedSave();} return;
-          }
-          const head=e.target.closest(".note-collapse-head");
-          if(head){ const col=head.closest(".note-collapse"); if(col) col.toggleAttribute("data-open"); return; }
-          const dateChip=e.target.closest(".note-date-chip");
-          if(dateChip&&dateChip.dataset.date){ navigateToDate?.(dateChip.dataset.date); return; }
-          const taskChip=e.target.closest(".note-task-chip");
-          if(taskChip&&taskChip.dataset.taskId){ navTo?.({type:"task",id:taskChip.dataset.taskId}); return; }
-        }}
-        style={{flex:1,padding:"20px 24px",fontFamily:'"DM Sans",sans-serif',fontSize:13,color:"#1C1714",lineHeight:1.65,overflowY:"auto",outline:"none"}}/>
+      <div style={{flex:1,overflowY:"auto",position:"relative"}}>
+        {editor ? <EditorContent editor={editor}/> : <div style={{padding:"20px 24px",color:"#C2B49E",fontSize:13}}>Loading editor\u2026</div>}
+        {slashOpen && slashPos && slashFiltered.length > 0 && (
+          <div className="slash-menu" style={{position:"fixed",top:slashPos.top,left:slashPos.left}}>
+            {slashFiltered.map(function(item, i) {
+              return <button key={item.id} className={i===slashIdx?"active":""} onMouseDown={function(e){e.preventDefault();executeSlashCommand(item);}}
+                style={i===slashIdx?{background:"#EBE4D8"}:{}}>
+                <span style={{width:20,textAlign:"center",flexShrink:0}}>{item.icon}</span> {item.label}
+              </button>;
+            })}
+          </div>
+        )}
+      </div>
       <div style={{padding:"6px 24px",background:"#F8F3EC",borderTop:"1px solid #EBE4D8",fontSize:11,color:"#C2B49E",display:"flex",gap:16,flexShrink:0}}>
-        <span>Tab \u2014 indent bullet</span><span>Shift+Tab \u2014 outdent</span><span>Backspace at line start \u2014 outdent nested</span>
+        <span>Type / for commands</span><span>**bold** *italic*</span><span># heading</span><span>- list</span><span>Ctrl+Z undo</span>
       </div>
     </div>
   );
