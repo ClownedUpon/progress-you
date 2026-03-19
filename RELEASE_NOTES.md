@@ -1,3 +1,23 @@
+## v2.3.0 — Multi-File Architecture
+
+**Modular source split**
+The single 5,200-line `index.html` has been split into 6 focused JSX modules under `src/app/`. The HTML shell (`index.html`, 81 lines) fetches and concatenates them at runtime before Babel compilation — no build step added. Each file has a clear responsibility:
+
+| File | Role |
+|------|------|
+| `01-core.jsx` | Helpers, constants, storage, migrations, styles |
+| `02-shared.jsx` | Reusable UI components (ColorPicker, TimePicker, Overlay, etc.) |
+| `03-modals.jsx` | All modal dialogs (Search, BlockModal, TaskEdit, Settings, etc.) |
+| `04-views.jsx` | All top-level views (Today, Timetable, Boards, Notes, Trackers, Stats) |
+| `05-overlays.jsx` | Side panels and overlays (NavOverlay, PinOverlay, TaskPanel, NotePanel) |
+| `06-app.jsx` | ErrorBoundary, App component, render call |
+
+This improves developer experience and makes LLM-assisted editing significantly more efficient — only the relevant 300–2,000 line file needs to be read instead of the full 5,000+ line monolith.
+
+**No functional changes** — the app behaves identically to v2.2.0.
+
+---
+
 ## v2.2.0 — Trackers, Search & Quality of Life
 
 **Trackers — new top-level feature**
