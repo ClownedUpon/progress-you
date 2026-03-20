@@ -540,6 +540,19 @@ var TaskChipNode = TiptapNode ? TiptapNode.create({
   },
 }) : null;
 
+function NoteImageView(props) {
+  var path = props.node.attrs.path;
+  var src = "";
+  try {
+    if (path && window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) {
+      src = window.__TAURI__.core.convertFileSrc(path);
+    }
+  } catch(e) {}
+  return React.createElement(NodeViewWrapper, {className: "note-img-wrap"},
+    React.createElement("img", {className: "note-img", src: src, "data-path": path, alt: "", draggable: false})
+  );
+}
+
 var NoteImageNode = TiptapNode ? TiptapNode.create({
   name: "noteImage",
   group: "block",
@@ -553,6 +566,7 @@ var NoteImageNode = TiptapNode ? TiptapNode.create({
   renderHTML: function(p) {
     return ["img", { class: "note-img", "data-path": p.node.attrs.path, alt: "" }];
   },
+  addNodeView: function() { return ReactNodeViewRenderer(NoteImageView); },
 }) : null;
 
 var CollapsibleTitle = TiptapNode ? TiptapNode.create({
