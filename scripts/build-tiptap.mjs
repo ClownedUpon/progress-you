@@ -58,13 +58,16 @@ const result = await esbuild.build({
       build.onResolve({ filter: /^react$/ }, () => ({ path: 'react', namespace: 'external-global' }));
       build.onResolve({ filter: /^react-dom$/ }, () => ({ path: 'react-dom', namespace: 'external-global' }));
       build.onResolve({ filter: /^react-dom\/client$/ }, () => ({ path: 'react-dom', namespace: 'external-global' }));
-      build.onResolve({ filter: /^react\/jsx-runtime$/ }, () => ({ path: 'react', namespace: 'external-global' }));
+      build.onResolve({ filter: /^react\/jsx-runtime$/ }, () => ({ path: 'react-jsx-runtime', namespace: 'external-global' }));
       build.onLoad({ filter: /.*/, namespace: 'external-global' }, (args) => {
         if (args.path === 'react') {
           return { contents: 'module.exports = React;', loader: 'js' };
         }
         if (args.path === 'react-dom') {
           return { contents: 'module.exports = ReactDOM;', loader: 'js' };
+        }
+        if (args.path === 'react-jsx-runtime') {
+          return { contents: 'module.exports = { jsx: React.createElement, jsxs: React.createElement, Fragment: React.Fragment };', loader: 'js' };
         }
       });
     }
