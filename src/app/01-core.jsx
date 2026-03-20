@@ -586,9 +586,17 @@ var TaskChipNode = TiptapNode ? TiptapNode.create({
 
 function NoteImageView(props) {
   var path = props.node.attrs.path;
+  var width = props.node.attrs.width;
+  var updateAttrs = props.updateAttributes;
+  var selected = props.selected;
   var imgSrc = useState(null);
   var src = imgSrc[0];
   var setSrc = imgSrc[1];
+  var resizing = useRef(false);
+  var startX = useRef(0);
+  var startW = useRef(0);
+  var imgRef = useRef(null);
+
   useEffect(function() {
     if (!path) return;
     var cancelled = false;
@@ -606,9 +614,45 @@ function NoteImageView(props) {
     }
     return function() { cancelled = true; };
   }, [path]);
+
+  var onResizeStart = function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    resizing.current = true;
+    startX.current = e.clientX;
+    startW.current = imgRef.current ? imgRef.current.offsetWidth : (width || 400);
+    var onMove = function(ev) {
+      if (!resizing.current) return;
+      var newW = Math.max(80, startW.current + (ev.clientX - startX.current));
+      if (imgRef.current) imgRef.current.style.width = newW + "px";
+    };
+    var onUp = function(ev) {
+      if (!resizing.current) return;
+      resizing.current = false;
+      var finalW = Math.max(80, startW.current + (ev.clientX - startX.current));
+      if (updateAttrs) updateAttrs({ width: finalW });
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
+  var wrapStyle = { position: "relative", display: "inline-block", maxWidth: "100%" };
+  if (selected) wrapStyle.outline = "2px solid #C8A86B";
+  wrapStyle.borderRadius = "8px";
+
+  var imgStyle = { display: "block", borderRadius: "8px", cursor: "pointer", maxWidth: "100%" };
+  if (width) imgStyle.width = width + "px";
+
   return React.createElement(NodeViewWrapper, {className: "note-img-wrap"},
-    src ? React.createElement("img", {className: "note-img", src: src, "data-path": path, alt: "", draggable: false})
-         : React.createElement("div", {style: {padding: "12px 16px", color: "#9B8E80", fontSize: 12, fontStyle: "italic"}}, "Loading image\u2026")
+    src ? React.createElement("div", {style: wrapStyle},
+      React.createElement("img", {ref: imgRef, className: "note-img", src: src, "data-path": path, alt: "", draggable: false, style: imgStyle}),
+      selected ? React.createElement("div", {
+        onMouseDown: onResizeStart,
+        style: {position:"absolute",bottom:4,right:4,width:14,height:14,background:"#C8A86B",borderRadius:2,cursor:"nwse-resize",border:"2px solid #FDFAF6"}
+      }) : null
+    ) : React.createElement("div", {style: {padding: "12px 16px", color: "#9B8E80", fontSize: 12, fontStyle: "italic"}}, "Loading image\u2026")
   );
 }
 
@@ -616,14 +660,29 @@ var NoteImageNode = TiptapNode ? TiptapNode.create({
   name: "noteImage",
   group: "block",
   atom: true,
+  selectable: true,
+  draggable: true,
   addAttributes: function() {
     return {
       path: { default: null, parseHTML: function(el) { return el.getAttribute("data-path"); } },
+      width: {
+        default: null,
+        parseHTML: function(el) {
+          var w = el.getAttribute("data-width") || el.style.width;
+          return w ? parseInt(w, 10) : null;
+        },
+        renderHTML: function(attrs) {
+          return attrs.width ? { "data-width": attrs.width, style: "width:" + attrs.width + "px" } : {};
+        },
+      },
     };
   },
   parseHTML: function() { return [{ tag: "img[data-path]" }, { tag: "img.note-img" }]; },
   renderHTML: function(p) {
-    return ["img", { class: "note-img", "data-path": p.node.attrs.path, alt: "" }];
+    var a = p.node.attrs;
+    var htmlAttrs = { class: "note-img", "data-path": a.path, alt: "" };
+    if (a.width) { htmlAttrs["data-width"] = a.width; htmlAttrs.style = "width:" + a.width + "px"; }
+    return ["img", htmlAttrs];
   },
   addNodeView: function() { return ReactNodeViewRenderer(NoteImageView); },
 }) : null;
