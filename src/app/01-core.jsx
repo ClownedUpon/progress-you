@@ -34,6 +34,19 @@ var TiptapFontFamily  = _TT.FontFamily;
 var TiptapImage       = _TT.Image;
 var TiptapPlaceholder = _TT.Placeholder;
 var TiptapSuggestion  = _TT.Suggestion;
+var TiptapTable         = _TT.Table;
+var TiptapTableRow      = _TT.TableRow;
+var TiptapTableCell     = _TT.TableCell;
+var TiptapTableHeader   = _TT.TableHeader;
+var TiptapTaskList      = _TT.TaskList;
+var TiptapTaskItem      = _TT.TaskItem;
+var TiptapCodeBlock     = _TT.CodeBlock;
+var TiptapHorizontalRule = _TT.HorizontalRule;
+var TiptapSubscript     = _TT.Subscript;
+var TiptapSuperscript   = _TT.Superscript;
+var TiptapHighlight     = _TT.Highlight;
+var TiptapTextAlign     = _TT.TextAlign;
+var TiptapCharacterCount = _TT.CharacterCount;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -54,12 +67,43 @@ const EDITOR_FONTS  = [
   { label:"Lora",  value:'"Lora", serif'                },
   { label:"Mono",  value:'"JetBrains Mono", monospace'  },
 ];
-const EDITOR_SIZES  = [
-  { label:"Small", value:"11px" },
-  { label:"Body",  value:"13px" },
-  { label:"Large", value:"16px" },
-  { label:"H2",    value:"20px" },
-  { label:"H1",    value:"26px" },
+const EDITOR_FORMAT = [
+  { label:"Small",     value:"small",  group:"text"    },
+  { label:"Body",      value:"p",      group:"text"    },
+  { label:"Large",     value:"large",  group:"text"    },
+  { label:"Heading 1", value:"h1",     group:"heading" },
+  { label:"Heading 2", value:"h2",     group:"heading" },
+  { label:"Heading 3", value:"h3",     group:"heading" },
+];
+var TOOLBAR_ITEMS = [
+  { id:"font",      label:"Font Family",      row:1, type:"dropdown" },
+  { id:"format",    label:"Text Format",       row:1, type:"dropdown" },
+  { id:"bold",      label:"Bold",              row:1, shortcut:"Ctrl+B",       type:"toggle" },
+  { id:"italic",    label:"Italic",            row:1, shortcut:"Ctrl+I",       type:"toggle" },
+  { id:"underline", label:"Underline",         row:1, shortcut:"Ctrl+U",       type:"toggle" },
+  { id:"sub",       label:"Subscript",         row:1, type:"toggle" },
+  { id:"super",     label:"Superscript",       row:1, type:"toggle" },
+  { id:"highlight", label:"Highlight",         row:1, type:"toggle" },
+  { id:"color",     label:"Text Colour",       row:1, type:"picker" },
+  { id:"alignL",    label:"Align Left",        row:1, type:"toggle" },
+  { id:"alignC",    label:"Align Centre",      row:1, type:"toggle" },
+  { id:"alignR",    label:"Align Right",       row:1, type:"toggle" },
+  { id:"alignJ",    label:"Justify",           row:1, type:"toggle" },
+  { id:"clearFmt",  label:"Clear Formatting",  row:1, type:"action" },
+  { id:"bullet",    label:"Bullet List",       row:2, type:"toggle" },
+  { id:"ordered",   label:"Numbered List",     row:2, type:"toggle" },
+  { id:"taskList",  label:"Task List",         row:2, type:"toggle" },
+  { id:"callout",   label:"Callout",           row:2, type:"action" },
+  { id:"collapse",  label:"Collapsible",       row:2, type:"action" },
+  { id:"codeBlock", label:"Code Block",        row:2, type:"toggle" },
+  { id:"hr",        label:"Horizontal Rule",   row:2, type:"action" },
+  { id:"table",     label:"Table",             row:2, type:"action" },
+  { id:"dateChip",  label:"Date Chip",         row:2, type:"picker" },
+  { id:"taskChip",  label:"Task Chip",         row:2, type:"picker" },
+  { id:"image",     label:"Image",             row:2, type:"action" },
+  { id:"undo",      label:"Undo",              row:2, shortcut:"Ctrl+Z",       type:"action" },
+  { id:"redo",      label:"Redo",              row:2, shortcut:"Ctrl+Shift+Z", type:"action" },
+  { id:"charCount", label:"Character Count",   row:2, type:"display" },
 ];
 const TEXT_COLORS = [
   "#1C1714","#4A3F30","#7A6C5E","#9B8E80",
@@ -709,7 +753,20 @@ var TIPTAP_BASE_EXTENSIONS = (function() {
     DateChipNode,
     TaskChipNode,
     NoteImageNode,
-  ];
+    TiptapTable ? TiptapTable.configure({ resizable: false }) : null,
+    TiptapTableRow,
+    TiptapTableCell,
+    TiptapTableHeader,
+    TiptapTaskList,
+    TiptapTaskItem ? TiptapTaskItem.configure({ nested: true }) : null,
+    TiptapCodeBlock,
+    TiptapHorizontalRule,
+    TiptapSubscript,
+    TiptapSuperscript,
+    TiptapHighlight ? TiptapHighlight.configure({ multicolor: true }) : null,
+    TiptapTextAlign ? TiptapTextAlign.configure({ types: ["heading", "paragraph"] }) : null,
+    TiptapCharacterCount,
+  ].filter(Boolean);
 })();
 
 function restoreNoteImages(domEl) {

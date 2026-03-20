@@ -550,9 +550,11 @@ function App() {
         .note-editor b,.note-editor strong{font-weight:700;}
         .note-editor i,.note-editor em{font-style:italic;}
         .note-editor u{text-decoration:underline;}
-        .tb-btn{padding:4px 8px;border-radius:5px;border:1px solid transparent;background:transparent;font-size:12px;color:#4A3F30;transition:all 0.12s;line-height:1.4;}
+        .tb-btn{position:relative;padding:4px 8px;border-radius:5px;border:1px solid transparent;background:transparent;font-size:12px;color:#4A3F30;transition:all 0.12s;line-height:1.4;}
         .tb-btn:hover{background:#D4C9B4;border-color:#C2B49E;opacity:1;}
         .tb-btn.on{background:#1C1714;color:#F8F3EC;border-color:#1C1714;}
+        .tb-btn[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);white-space:nowrap;background:#1C1714;color:#F8F3EC;font-size:10px;font-weight:500;padding:3px 8px;border-radius:5px;pointer-events:none;z-index:300;opacity:0;animation:tipIn 0.15s 0.4s forwards;}
+        @keyframes tipIn{to{opacity:1;}}
         select.tb-sel{padding:4px 7px;border-radius:5px;border:1px solid #D6CEC3;background:#FDFAF6;font-family:inherit;font-size:11px;color:#4A3F30;outline:none;}
         select.tb-sel:focus{border-color:#8B7D6B;}
         .note-row{display:flex;align-items:center;gap:4px;padding:5px 8px 5px 6px;border-radius:7px;cursor:pointer;transition:background 0.12s;}
@@ -577,17 +579,44 @@ function App() {
         .note-collapse{border:1px solid #E3D9CC;border-radius:8px;margin:8px 0;display:block;}
         .note-collapse-head{display:flex;align-items:center;gap:6px;padding:7px 12px;cursor:pointer;background:#F3EDE3;border-radius:8px;user-select:none;}
         .note-collapse[data-open] .note-collapse-head{border-radius:8px 8px 0 0;}
-        .note-collapse-arrow{font-size:13px;display:inline-block;transition:transform 0.18s;flex-shrink:0;color:#7A6C5E;cursor:pointer;}
+        .note-collapse-arrow{font-size:18px;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;transition:transform 0.18s;flex-shrink:0;color:#7A6C5E;cursor:pointer;}
         .note-collapse[data-open] .note-collapse-arrow{transform:rotate(90deg);}
         .note-collapse-title{flex:1;font-weight:600;font-size:12px;color:#4A3F30;outline:none;min-width:0;}
-        .note-collapse-del{background:none;border:none;cursor:pointer;color:#C43A3A;font-size:16px;font-weight:700;padding:0 2px 0 4px;flex-shrink:0;line-height:1;}
-        .note-collapse-del:hover{color:#A02020;opacity:1;}
+        .note-collapse-del{background:none;border:none;cursor:pointer;color:#C43A3A;font-size:20px;font-weight:700;padding:0;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;border-radius:4px;}
+        .note-collapse-del:hover{color:#A02020;opacity:1;background:rgba(196,58,58,0.12);}
         .note-collapse-body{display:none;padding:10px 14px;font-size:13px;border-top:1px solid #E3D9CC;outline:none;min-height:24px;}
         .note-collapse[data-open] .note-collapse-body{display:block;}
         .note-date-chip{display:inline-flex;align-items:center;gap:3px;background:#E3F0FB;color:#2A6FAD;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;cursor:pointer;user-select:none;}
         .note-task-chip{display:inline-flex;align-items:center;gap:3px;background:#F0EBF8;color:#6B3FC7;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;cursor:pointer;user-select:none;}
         .note-img-wrap{display:block;}
         .note-img{max-width:100%;border-radius:8px;margin:6px 0;display:block;cursor:default;}
+        .ProseMirror ul[data-type="taskList"]{list-style:none;padding:0;margin:4px 0;}
+        .ProseMirror ul[data-type="taskList"] li{display:flex;align-items:flex-start;gap:6px;margin:2px 0;}
+        .ProseMirror ul[data-type="taskList"] li label{flex-shrink:0;margin-top:3px;cursor:pointer;}
+        .ProseMirror ul[data-type="taskList"] li label input[type="checkbox"]{accent-color:#1C1714;width:14px;height:14px;cursor:pointer;}
+        .ProseMirror ul[data-type="taskList"] li div{flex:1;}
+        .ProseMirror ul[data-type="taskList"] li[data-checked="true"]>div>p{text-decoration:line-through;color:#9B8E80;}
+        .ProseMirror pre{background:#2C2522;color:#E8E0D4;border-radius:8px;padding:12px 16px;margin:8px 0;font-family:"JetBrains Mono",monospace;font-size:12px;overflow-x:auto;}
+        .ProseMirror code{background:#EBE4D8;color:#4A3F30;padding:1px 4px;border-radius:3px;font-family:"JetBrains Mono",monospace;font-size:12px;}
+        .ProseMirror pre code{background:transparent;color:inherit;padding:0;}
+        .ProseMirror table{border-collapse:collapse;width:100%;margin:8px 0;}
+        .ProseMirror th,.ProseMirror td{border:1px solid #D6CEC3;padding:6px 10px;text-align:left;font-size:12px;min-width:60px;vertical-align:top;}
+        .ProseMirror th{background:#F3EDE3;font-weight:700;font-size:11px;color:#4A3F30;}
+        .ProseMirror td{background:#FDFAF6;}
+        .ProseMirror .selectedCell{background:#E3F0FB;}
+        .ProseMirror hr{border:none;border-top:2px solid #E3D9CC;margin:12px 0;}
+        .ProseMirror mark{background:#FFF3C4;padding:1px 2px;border-radius:2px;}
+        .ProseMirror sub{font-size:0.75em;}
+        .ProseMirror sup{font-size:0.75em;}
+        .table-bubble{position:absolute;display:flex;gap:2px;background:#1C1714;border-radius:8px;padding:4px;box-shadow:0 4px 16px rgba(0,0,0,0.2);z-index:200;}
+        .table-bubble button{padding:4px 7px;border:none;background:transparent;color:#C2B49E;font-size:10px;border-radius:4px;cursor:pointer;white-space:nowrap;font-family:inherit;}
+        .table-bubble button:hover{background:#3C3330;color:#F8F3EC;opacity:1;}
+        .table-bubble button.del{color:#C43A3A;}
+        .table-bubble button.del:hover{background:rgba(196,58,58,0.2);color:#E85555;}
+        .tb-customize{position:absolute;top:calc(100% + 4px);right:0;background:#FDFAF6;border:1.5px solid #E3D9CC;border-radius:10px;padding:12px;min-width:240px;max-height:360px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.14);z-index:300;}
+        .tb-customize label{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:5px;font-size:11px;color:#4A3F30;cursor:pointer;}
+        .tb-customize label:hover{background:#F3EDE3;}
+        .tb-customize input[type="checkbox"]{accent-color:#1C1714;width:13px;height:13px;cursor:pointer;}
       `}</style>
 
       {/* ── Header ── */}

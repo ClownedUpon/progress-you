@@ -820,7 +820,7 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
   var [titleVal,     setTitleVal]     =useState(note.title||"");
   var [selColor,     setSelColor]     =useState("#1C1714");
   var [showClr,      setShowClr]      =useState(false);
-  var [fmtState,     setFmtState]     =useState({bold:false,italic:false,underline:false,heading:0,bulletList:false,orderedList:false});
+  var [fmtState,     setFmtState]     =useState({bold:false,italic:false,underline:false,heading:0,bulletList:false,orderedList:false,subscript:false,superscript:false,highlight:false,taskList:false,codeBlock:false,textAlign:"left",inTable:false,fontSize:null});
   var [tagInput,     setTagInput]     =useState("");
   var [showTagInput, setShowTagInput] =useState(false);
   var [remindAt,     setRemindAt]     =useState(note.remindAt||"");
@@ -833,6 +833,9 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
   var [slashQuery,   setSlashQuery]   =useState("");
   var [slashIdx,     setSlashIdx]     =useState(0);
   var slashRange     =useRef(null);
+  var [showCustomize,setShowCustomize]=useState(false);
+  var [toolbarPref,  setToolbarPref]  =useState(null);
+  var editorWrapRef  =useRef(null);
   var tags=note.tags||[];
   var filteredTasks=(tasks||[]).filter(function(t){ return t.type!=="spacer"&&t.status!=="done"&&
     !(note.linkedTaskIds||[]).includes(t.id)&&
@@ -858,13 +861,23 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
       }, 500);
     },
     onSelectionUpdate: function(ctx) {
+      var ed = ctx.editor;
+      var fsAttr = ed.getAttributes("fontSize");
       setFmtState({
-        bold: ctx.editor.isActive("bold"),
-        italic: ctx.editor.isActive("italic"),
-        underline: ctx.editor.isActive("underline"),
-        heading: ctx.editor.isActive("heading", {level:1}) ? 1 : ctx.editor.isActive("heading", {level:2}) ? 2 : ctx.editor.isActive("heading", {level:3}) ? 3 : 0,
-        bulletList: ctx.editor.isActive("bulletList"),
-        orderedList: ctx.editor.isActive("orderedList"),
+        bold: ed.isActive("bold"),
+        italic: ed.isActive("italic"),
+        underline: ed.isActive("underline"),
+        heading: ed.isActive("heading", {level:1}) ? 1 : ed.isActive("heading", {level:2}) ? 2 : ed.isActive("heading", {level:3}) ? 3 : 0,
+        bulletList: ed.isActive("bulletList"),
+        orderedList: ed.isActive("orderedList"),
+        subscript: ed.isActive("subscript"),
+        superscript: ed.isActive("superscript"),
+        highlight: ed.isActive("highlight"),
+        taskList: ed.isActive("taskList"),
+        codeBlock: ed.isActive("codeBlock"),
+        textAlign: ed.getAttributes("paragraph").textAlign || ed.getAttributes("heading").textAlign || "left",
+        inTable: ed.isActive("table"),
+        fontSize: (fsAttr && fsAttr.size) ? fsAttr.size : null,
       });
     },
     editorProps: {
@@ -890,12 +903,19 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
         if (head) {
           var col = head.closest(".note-collapse");
           if (col) {
-            var cPos = view.posAtDOM(col, 0);
-            var cResolved = view.state.doc.resolve(cPos);
-            var cNodePos = cResolved.before(cResolved.depth);
-            var cNode = view.state.doc.nodeAt(cNodePos);
-            if (cNode && cNode.type.name === "collapsible") {
-              view.dispatch(view.state.tr.setNodeMarkup(cNodePos, null, Object.assign({}, cNode.attrs, {open: !cNode.attrs.open})));
+            var cDomPos = view.posAtDOM(col, 0);
+            var foundPos = null;
+            var foundNode = null;
+            view.state.doc.descendants(function(node, npos) {
+              if (foundPos !== null) return false;
+              if (node.type.name === "collapsible" && npos <= cDomPos && npos + node.nodeSize > cDomPos) {
+                foundPos = npos;
+                foundNode = node;
+                return false;
+              }
+            });
+            if (foundNode) {
+              view.dispatch(view.state.tr.setNodeMarkup(foundPos, null, Object.assign({}, foundNode.attrs, {open: !foundNode.attrs.open})));
             }
           }
           return true;
@@ -956,6 +976,11 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
 
   useEffect(function() { if(focusTitle&&titleRef.current){ titleRef.current.focus(); titleRef.current.select(); if (onFocusTitleDone) onFocusTitleDone(); } },[focusTitle]);
 
+  // Load toolbar customization preference
+  useEffect(function() {
+    sget("py-editor-toolbar").then(function(v) { if (v) setToolbarPref(v); }).catch(function(){});
+  }, []);
+
   // Slash command items
   var SLASH_ITEMS = [
     { id:"h1", label:"Heading 1", icon:"\u0048\u2081", run: function(ed) { ed.chain().focus().toggleHeading({level:1}).run(); } },
@@ -968,6 +993,13 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
     { id:"date", label:"Date", icon:"\uD83D\uDCC5", run: "date" },
     { id:"task", label:"Task Link", icon:"\uD83D\uDCCC", run: "task" },
     { id:"image", label:"Image", icon:"\uD83D\uDDBC", run: "image" },
+    { id:"tasklist", label:"Task List", icon:"\u2611", run: function(ed) { ed.chain().focus().toggleTaskList().run(); } },
+    { id:"codeblock", label:"Code Block", icon:"</>", run: function(ed) { ed.chain().focus().toggleCodeBlock().run(); } },
+    { id:"hr", label:"Horizontal Rule", icon:"\u2015", run: function(ed) { ed.chain().focus().setHorizontalRule().run(); } },
+    { id:"table", label:"Table (3x3)", icon:"\u25A6", run: function(ed) { ed.chain().focus().insertTable({rows:3,cols:3,withHeaderRow:true}).run(); } },
+    { id:"highlight", label:"Highlight", icon:"\uD83D\uDD8D", run: function(ed) { ed.chain().focus().toggleHighlight().run(); } },
+    { id:"sub", label:"Subscript", icon:"X\u2082", run: function(ed) { ed.chain().focus().toggleSubscript().run(); } },
+    { id:"super", label:"Superscript", icon:"X\u00B2", run: function(ed) { ed.chain().focus().toggleSuperscript().run(); } },
   ];
   var slashFiltered = SLASH_ITEMS.filter(function(item) {
     return !slashQuery || item.label.toLowerCase().includes(slashQuery.toLowerCase());
@@ -1027,6 +1059,20 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
   var applyColor = function(v) { setSelColor(v); if (editor) editor.chain().focus().setColor(v).run(); setShowClr(false); };
   var sep = <div style={{width:1,height:18,background:"#D6CEC3",flexShrink:0,margin:"0 2px"}}/>;
 
+  // Toolbar visibility helper
+  var visibleSet = toolbarPref && toolbarPref.visible ? toolbarPref.visible : null;
+  var isVis = function(id) { return !visibleSet || visibleSet.indexOf(id) !== -1; };
+
+  // Compute the unified format dropdown value
+  var fmtDropVal = fmtState.heading ? "h" + fmtState.heading : fmtState.fontSize === "11px" ? "small" : fmtState.fontSize === "16px" ? "large" : "p";
+
+  // Save toolbar pref
+  var saveToolbarPref = function(newPref) { setToolbarPref(newPref); sset("py-editor-toolbar", newPref); };
+
+  // Character count
+  var charCount = editor && editor.storage && editor.storage.characterCount ? editor.storage.characterCount.characters() : 0;
+  var wordCount = editor && editor.storage && editor.storage.characterCount ? editor.storage.characterCount.words() : 0;
+
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
       {/* Title + tags */}
@@ -1076,85 +1122,158 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
         </div>
       </div>
       {/* Toolbar */}
-      <div style={{display:"flex",alignItems:"center",gap:3,padding:"7px 12px",background:"#F3EDE3",borderBottom:"1px solid #E3D9CC",flexWrap:"wrap",flexShrink:0}}>
-        <select className="tb-sel" defaultValue={EDITOR_FONTS[0].value} onChange={function(e){ if(editor) editor.chain().focus().setFontFamily(e.target.value).run(); }}>
-          {EDITOR_FONTS.map(function(f){return <option key={f.value} value={f.value}>{f.label}</option>;})}
-        </select>
-        <select className="tb-sel" value={fmtState.heading ? "h"+fmtState.heading : "p"} onChange={function(e){ if(!editor) return; var v=e.target.value; if(v==="p"){editor.chain().focus().setParagraph().run();} else if(v==="small"){editor.chain().focus().setParagraph().run(); editor.chain().focus().setMark("fontSize",{size:"11px"}).run();} else if(v==="large"){editor.chain().focus().setParagraph().run(); editor.chain().focus().setMark("fontSize",{size:"16px"}).run();} else {var lv=parseInt(v.replace("h","")); editor.chain().focus().toggleHeading({level:lv}).run();} }} title="Text format">
-          <option value="small">Small</option>
-          <option value="p">Body</option>
-          <option value="large">Large</option>
-          <option value="h3">Heading 3</option>
-          <option value="h2">Heading 2</option>
-          <option value="h1">Heading 1</option>
-        </select>
-        {sep}
-        {[["bold","B",{fontWeight:700},"Bold"],["italic","I",{fontStyle:"italic"},"Italic"],["underline","U",{textDecoration:"underline"},"Underline"]].map(function(arr){
-          var co=arr[0], l=arr[1], extra=arr[2], tip=arr[3];
-          return <button key={co} className={"tb-btn"+(fmtState[co]?" on":"")} title={tip} onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus()["toggle"+co.charAt(0).toUpperCase()+co.slice(1)]().run();}} style={extra}>{l}</button>;
-        })}
-        {sep}
-        <button className={"tb-btn"+(fmtState.bulletList?" on":"")} title="Bullet list" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleBulletList().run();}} style={{fontSize:13}}>&#x2022;</button>
-        <button className={"tb-btn"+(fmtState.orderedList?" on":"")} title="Numbered list" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleOrderedList().run();}} style={{fontSize:11}}>1.</button>
-        {sep}
-        <div style={{position:"relative"}}>
-          <button className="tb-btn" title="Text colour" onMouseDown={function(e){e.preventDefault();setShowClr(function(v){return !v;});}} style={{display:"flex",alignItems:"center",gap:4}}>
-            <span style={{fontSize:13,fontWeight:700,color:selColor}}>A</span>
-            <span style={{display:"block",width:12,height:3,borderRadius:2,background:selColor}}/>
-            <span style={{fontSize:8,color:"#9B8E80"}}>&#9662;</span>
-          </button>
-          {showClr&&(
-            <div onMouseDown={function(e){e.preventDefault();}} style={{position:"absolute",top:"110%",left:0,zIndex:50,background:"#FDFAF6",borderRadius:10,padding:"10px",border:"1px solid #E3D9CC",boxShadow:"0 8px 24px rgba(0,0,0,0.14)",minWidth:220}}>
-              <ColorPicker value={selColor} onChange={applyColor} label="Text Colour"/>
-            </div>
-          )}
+      <div style={{borderBottom:"1px solid #E3D9CC",flexShrink:0}}>
+        {/* Row 1: Text formatting */}
+        <div style={{display:"flex",alignItems:"center",gap:3,padding:"5px 12px",background:"#F3EDE3",flexWrap:"wrap"}}>
+          {isVis("font")&&<select className="tb-sel" defaultValue={EDITOR_FONTS[0].value} onChange={function(e){ if(editor) editor.chain().focus().setFontFamily(e.target.value).run(); }}>
+            {EDITOR_FONTS.map(function(f){return <option key={f.value} value={f.value}>{f.label}</option>;})}
+          </select>}
+          {isVis("format")&&<select className="tb-sel" value={fmtDropVal} onChange={function(e){ if(!editor) return; var v=e.target.value; if(v==="p"){editor.chain().focus().setParagraph().unsetMark("fontSize").run();} else if(v==="small"){editor.chain().focus().setParagraph().setMark("fontSize",{size:"11px"}).run();} else if(v==="large"){editor.chain().focus().setParagraph().setMark("fontSize",{size:"16px"}).run();} else {var lv=parseInt(v.replace("h","")); editor.chain().focus().toggleHeading({level:lv}).run();} }}>
+            <optgroup label="Text">
+              <option value="small">Small</option>
+              <option value="p">Body</option>
+              <option value="large">Large</option>
+            </optgroup>
+            <optgroup label="Heading">
+              <option value="h1">Heading 1</option>
+              <option value="h2">Heading 2</option>
+              <option value="h3">Heading 3</option>
+            </optgroup>
+          </select>}
+          {(isVis("font")||isVis("format"))&&sep}
+          {isVis("bold")&&<button className={"tb-btn"+(fmtState.bold?" on":"")} data-tip="Bold (Ctrl+B)" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleBold().run();}} style={{fontWeight:700}}>B</button>}
+          {isVis("italic")&&<button className={"tb-btn"+(fmtState.italic?" on":"")} data-tip="Italic (Ctrl+I)" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleItalic().run();}} style={{fontStyle:"italic"}}>I</button>}
+          {isVis("underline")&&<button className={"tb-btn"+(fmtState.underline?" on":"")} data-tip="Underline (Ctrl+U)" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleUnderline().run();}} style={{textDecoration:"underline"}}>U</button>}
+          {isVis("sub")&&<button className={"tb-btn"+(fmtState.subscript?" on":"")} data-tip="Subscript" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleSubscript().run();}} style={{fontSize:11}}>X<sub>2</sub></button>}
+          {isVis("super")&&<button className={"tb-btn"+(fmtState.superscript?" on":"")} data-tip="Superscript" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleSuperscript().run();}} style={{fontSize:11}}>X<sup>2</sup></button>}
+          {sep}
+          {isVis("highlight")&&<button className={"tb-btn"+(fmtState.highlight?" on":"")} data-tip="Highlight" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleHighlight().run();}} style={{fontSize:13,background:fmtState.highlight?"#FFF3C4":"transparent",borderColor:fmtState.highlight?"#E8D87A":"transparent"}}>
+            <span style={{background:"#FFF3C4",padding:"0 3px",borderRadius:2}}>H</span>
+          </button>}
+          {isVis("color")&&<div style={{position:"relative"}}>
+            <button className="tb-btn" data-tip="Text Colour" onMouseDown={function(e){e.preventDefault();setShowClr(function(v){return !v;});}} style={{display:"flex",alignItems:"center",gap:4}}>
+              <span style={{fontSize:13,fontWeight:700,color:selColor}}>A</span>
+              <span style={{display:"block",width:12,height:3,borderRadius:2,background:selColor}}/>
+              <span style={{fontSize:8,color:"#9B8E80"}}>&#9662;</span>
+            </button>
+            {showClr&&(
+              <div onMouseDown={function(e){e.preventDefault();}} style={{position:"absolute",top:"110%",left:0,zIndex:50,background:"#FDFAF6",borderRadius:10,padding:"10px",border:"1px solid #E3D9CC",boxShadow:"0 8px 24px rgba(0,0,0,0.14)",minWidth:220}}>
+                <ColorPicker value={selColor} onChange={applyColor} label="Text Colour"/>
+              </div>
+            )}
+          </div>}
+          {sep}
+          {isVis("alignL")&&<button className={"tb-btn"+(fmtState.textAlign==="left"?" on":"")} data-tip="Align Left" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().setTextAlign("left").run();}} style={{fontSize:13,lineHeight:1}}>&#x2261;</button>}
+          {isVis("alignC")&&<button className={"tb-btn"+(fmtState.textAlign==="center"?" on":"")} data-tip="Align Centre" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().setTextAlign("center").run();}} style={{fontSize:11,lineHeight:1,letterSpacing:1}}>&#x2550;</button>}
+          {isVis("alignR")&&<button className={"tb-btn"+(fmtState.textAlign==="right"?" on":"")} data-tip="Align Right" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().setTextAlign("right").run();}} style={{fontSize:13,lineHeight:1,transform:"scaleX(-1)"}}>&#x2261;</button>}
+          {isVis("alignJ")&&<button className={"tb-btn"+(fmtState.textAlign==="justify"?" on":"")} data-tip="Justify" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().setTextAlign("justify").run();}} style={{fontSize:11,lineHeight:1}}>&#x2630;</button>}
+          {sep}
+          {isVis("clearFmt")&&<button className="tb-btn" data-tip="Clear Formatting" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().unsetAllMarks().clearNodes().run();}} style={{fontSize:11,color:"#9B8E80"}}>&#x2715; fmt</button>}
+          <div style={{marginLeft:"auto",fontSize:11,color:saved?"#1A7A43":"#9B8E80",fontWeight:500}}>{saved?"\u2713 Saved":"Saving\u2026"}</div>
         </div>
-        {sep}
-        <button className="tb-btn" title="Callout box" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().insertContent({type:"callout",content:[{type:"text",text:"Callout text\u2026"}]}).run();}}>Callout</button>
-        <button className="tb-btn" title="Collapsible section" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().insertContent({type:"collapsible",content:[{type:"collapsibleTitle",content:[{type:"text",text:"Section title"}]},{type:"collapsibleBody",content:[{type:"paragraph",content:[{type:"text",text:"Content here\u2026"}]}]}]}).run();}}>Collapse</button>
-        <div style={{position:"relative"}}>
-          <button className="tb-btn" title="Insert date chip" onMouseDown={function(e){e.preventDefault();setShowDatePick(function(v){return !v;});}}>Date</button>
-          {showDatePick&&(
-            <div onMouseDown={function(e){e.preventDefault();}} style={{position:"absolute",top:"110%",left:0,zIndex:100,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:9,padding:"10px",minWidth:200,boxShadow:"0 4px 16px rgba(0,0,0,0.13)"}}>
-              <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Insert Date</div>
-              <button onMouseDown={function(){insertDateChip(todayISO());}} style={{...S.btnMicro,width:"100%",marginBottom:8,textAlign:"left"}}>Today ({new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short"})})</button>
-              <input type="date" value={datePickVal} onChange={function(e){setDatePickVal(e.target.value);}}
-                style={{...S.input,marginBottom:8,padding:"4px 8px",fontSize:11}}/>
-              <button onMouseDown={function(){insertDateChip(datePickVal);}} style={{...S.btnDark,width:"100%",fontSize:12,padding:"5px 0"}}>Insert</button>
-            </div>
-          )}
-        </div>
-        {sep}
-        <div style={{position:"relative"}}>
-          <button className="tb-btn" title="Link a task" onMouseDown={function(e){e.preventDefault();setShowTaskPick(function(v){return !v;});}}>Task</button>
-          {showTaskPick&&(
-            <div onMouseDown={function(e){e.preventDefault();}} style={{position:"absolute",top:"110%",left:0,zIndex:100,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:9,padding:8,minWidth:230,maxHeight:230,overflowY:"auto",boxShadow:"0 4px 16px rgba(0,0,0,0.13)"}}>
-              <input value={taskSearch} onChange={function(e){setTaskSearch(e.target.value);}} placeholder="Search tasks\u2026"
-                style={{...S.input,marginBottom:6,padding:"5px 8px",fontSize:11}}/>
-              {filteredTasks.length===0&&<div style={{fontSize:11,color:"#9B8E80",padding:"4px 2px"}}>No tasks found.</div>}
-              {filteredTasks.map(function(t){return (
-                <div key={t.id} onMouseDown={function(){insertTaskChip(t);}}
-                  style={{fontSize:12,padding:"5px 8px",borderRadius:6,cursor:"pointer",color:"#1C1714",display:"flex",alignItems:"center",gap:6}}
-                  onMouseEnter={function(e){e.currentTarget.style.background="#EBE4D8";}}
-                  onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
-                  <span style={{fontSize:10,background:"#EBE4D8",borderRadius:4,padding:"1px 5px",color:"#6B5E4E",flexShrink:0}}>{t.status}</span>
-                  <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</span>
+        {/* Row 2: Blocks & inserts */}
+        <div style={{display:"flex",alignItems:"center",gap:3,padding:"5px 12px",background:"#F3EDE3",borderTop:"1px solid #EBE4D8",flexWrap:"wrap"}}>
+          {isVis("bullet")&&<button className={"tb-btn"+(fmtState.bulletList?" on":"")} data-tip="Bullet List" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleBulletList().run();}} style={{fontSize:13}}>&#x2022;</button>}
+          {isVis("ordered")&&<button className={"tb-btn"+(fmtState.orderedList?" on":"")} data-tip="Numbered List" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleOrderedList().run();}} style={{fontSize:11}}>1.</button>}
+          {isVis("taskList")&&<button className={"tb-btn"+(fmtState.taskList?" on":"")} data-tip="Task List" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleTaskList().run();}} style={{fontSize:13}}>&#x2611;</button>}
+          {sep}
+          {isVis("callout")&&<button className="tb-btn" data-tip="Callout Box" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().insertContent({type:"callout",content:[{type:"text",text:"Callout text\u2026"}]}).run();}}>Callout</button>}
+          {isVis("collapse")&&<button className="tb-btn" data-tip="Collapsible Section" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().insertContent({type:"collapsible",content:[{type:"collapsibleTitle",content:[{type:"text",text:"Section title"}]},{type:"collapsibleBody",content:[{type:"paragraph",content:[{type:"text",text:"Content here\u2026"}]}]}]}).run();}}>Collapse</button>}
+          {isVis("codeBlock")&&<button className={"tb-btn"+(fmtState.codeBlock?" on":"")} data-tip="Code Block" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleCodeBlock().run();}} style={{fontFamily:"monospace",fontSize:11}}>&lt;/&gt;</button>}
+          {isVis("hr")&&<button className="tb-btn" data-tip="Horizontal Rule" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().setHorizontalRule().run();}} style={{fontSize:11,letterSpacing:2}}>---</button>}
+          {isVis("table")&&<button className="tb-btn" data-tip="Insert Table (3x3)" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().insertTable({rows:3,cols:3,withHeaderRow:true}).run();}} style={{fontSize:12}}>&#x25A6;</button>}
+          {sep}
+          {isVis("dateChip")&&<div style={{position:"relative"}}>
+            <button className="tb-btn" data-tip="Insert Date Chip" onMouseDown={function(e){e.preventDefault();setShowDatePick(function(v){return !v;});}}>Date</button>
+            {showDatePick&&(
+              <div onMouseDown={function(e){e.preventDefault();}} style={{position:"absolute",top:"110%",left:0,zIndex:100,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:9,padding:"10px",minWidth:200,boxShadow:"0 4px 16px rgba(0,0,0,0.13)"}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Insert Date</div>
+                <button onMouseDown={function(){insertDateChip(todayISO());}} style={{...S.btnMicro,width:"100%",marginBottom:8,textAlign:"left"}}>Today ({new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short"})})</button>
+                <input type="date" value={datePickVal} onChange={function(e){setDatePickVal(e.target.value);}}
+                  style={{...S.input,marginBottom:8,padding:"4px 8px",fontSize:11}}/>
+                <button onMouseDown={function(){insertDateChip(datePickVal);}} style={{...S.btnDark,width:"100%",fontSize:12,padding:"5px 0"}}>Insert</button>
+              </div>
+            )}
+          </div>}
+          {isVis("taskChip")&&<div style={{position:"relative"}}>
+            <button className="tb-btn" data-tip="Link a Task" onMouseDown={function(e){e.preventDefault();setShowTaskPick(function(v){return !v;});}}>Task</button>
+            {showTaskPick&&(
+              <div onMouseDown={function(e){e.preventDefault();}} style={{position:"absolute",top:"110%",left:0,zIndex:100,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:9,padding:8,minWidth:230,maxHeight:230,overflowY:"auto",boxShadow:"0 4px 16px rgba(0,0,0,0.13)"}}>
+                <input value={taskSearch} onChange={function(e){setTaskSearch(e.target.value);}} placeholder="Search tasks\u2026"
+                  style={{...S.input,marginBottom:6,padding:"5px 8px",fontSize:11}}/>
+                {filteredTasks.length===0&&<div style={{fontSize:11,color:"#9B8E80",padding:"4px 2px"}}>No tasks found.</div>}
+                {filteredTasks.map(function(t){return (
+                  <div key={t.id} onMouseDown={function(){insertTaskChip(t);}}
+                    style={{fontSize:12,padding:"5px 8px",borderRadius:6,cursor:"pointer",color:"#1C1714",display:"flex",alignItems:"center",gap:6}}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#EBE4D8";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                    <span style={{fontSize:10,background:"#EBE4D8",borderRadius:4,padding:"1px 5px",color:"#6B5E4E",flexShrink:0}}>{t.status}</span>
+                    <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</span>
+                  </div>
+                );})}
+              </div>
+            )}
+          </div>}
+          {isVis("image")&&<button className="tb-btn" data-tip="Insert Image" onMouseDown={function(e){e.preventDefault();doInsertImage();}}>Image</button>}
+          {sep}
+          {isVis("undo")&&<button className="tb-btn" data-tip="Undo (Ctrl+Z)" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().undo().run();}} style={{fontSize:12}}>&#x21A9;</button>}
+          {isVis("redo")&&<button className="tb-btn" data-tip="Redo (Ctrl+Shift+Z)" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().redo().run();}} style={{fontSize:12}}>&#x21AA;</button>}
+          {sep}
+          {/* Customize toolbar gear */}
+          <div style={{position:"relative"}}>
+            <button className="tb-btn" data-tip="Customize Toolbar" onMouseDown={function(e){e.preventDefault();setShowCustomize(function(v){return !v;});}} style={{fontSize:12}}>&#x2699;</button>
+            {showCustomize&&(
+              <div className="tb-customize" onMouseDown={function(e){e.preventDefault();}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Customize Toolbar</div>
+                <div style={{fontSize:9,color:"#9B8E80",marginBottom:8}}>Hidden items stay available via / commands</div>
+                {TOOLBAR_ITEMS.filter(function(ti){return ti.type!=="display";}).map(function(ti) {
+                  var checked = isVis(ti.id);
+                  return <label key={ti.id}>
+                    <input type="checkbox" checked={checked} onChange={function() {
+                      var current = visibleSet || TOOLBAR_ITEMS.map(function(t){return t.id;});
+                      var next = checked ? current.filter(function(x){return x!==ti.id;}) : current.concat([ti.id]);
+                      saveToolbarPref({visible: next});
+                    }}/>
+                    {ti.label}
+                  </label>;
+                })}
+                <div style={{marginTop:8,borderTop:"1px solid #E3D9CC",paddingTop:8}}>
+                  <button onMouseDown={function(e){e.preventDefault();saveToolbarPref(null);setShowCustomize(false);}}
+                    style={{...S.btnMicro,width:"100%",fontSize:10,textAlign:"center"}}>Reset to Default</button>
                 </div>
-              );})}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
+          {isVis("charCount")&&<div style={{marginLeft:"auto",fontSize:10,color:"#9B8E80"}} data-tip={wordCount+" words"}>{charCount} chars</div>}
         </div>
-        <button className="tb-btn" title="Insert image (file reference)" onMouseDown={function(e){e.preventDefault();doInsertImage();}}>Image</button>
-        {sep}
-        <button className="tb-btn" title="Clear formatting" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().unsetAllMarks().run();}} style={{fontSize:11,color:"#9B8E80"}}>&#x2715; fmt</button>
-        {sep}
-        <button className="tb-btn" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().undo().run();}} title="Undo (Ctrl+Z)" style={{fontSize:12}}>&#x21A9;</button>
-        <button className="tb-btn" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().redo().run();}} title="Redo (Ctrl+Shift+Z)" style={{fontSize:12}}>&#x21AA;</button>
-        <div style={{marginLeft:"auto",fontSize:11,color:saved?"#1A7A43":"#9B8E80",fontWeight:500}}>{saved?"\u2713 Saved":"Saving\u2026"}</div>
       </div>
       {/* Content */}
-      <div style={{flex:1,overflowY:"auto",position:"relative"}}>
+      <div ref={editorWrapRef} style={{flex:1,overflowY:"auto",position:"relative"}}>
         {editor ? <EditorContent editor={editor}/> : <div style={{padding:"20px 24px",color:"#C2B49E",fontSize:13}}>Loading editor\u2026</div>}
+        {/* Table bubble menu */}
+        {fmtState.inTable && editor && (function() {
+          var tblEl = null;
+          try {
+            var domInfo = editor.view.domAtPos(editor.state.selection.from);
+            var n = domInfo.node;
+            while (n && n.tagName !== "TABLE") n = n.parentElement;
+            tblEl = n;
+          } catch(e) {}
+          if (!tblEl || !editorWrapRef.current) return null;
+          var wrapRect = editorWrapRef.current.getBoundingClientRect();
+          var tblRect = tblEl.getBoundingClientRect();
+          var top = tblRect.top - wrapRect.top + editorWrapRef.current.scrollTop - 36;
+          var left = tblRect.left - wrapRect.left;
+          return <div className="table-bubble" style={{top:top,left:left}}>
+            <button data-tip="Add row above" onMouseDown={function(e){e.preventDefault();editor.chain().focus().addRowBefore().run();}}>+ Row &#x2191;</button>
+            <button data-tip="Add row below" onMouseDown={function(e){e.preventDefault();editor.chain().focus().addRowAfter().run();}}>+ Row &#x2193;</button>
+            <button data-tip="Add column left" onMouseDown={function(e){e.preventDefault();editor.chain().focus().addColumnBefore().run();}}>+ Col &#x2190;</button>
+            <button data-tip="Add column right" onMouseDown={function(e){e.preventDefault();editor.chain().focus().addColumnAfter().run();}}>+ Col &#x2192;</button>
+            <button className="del" data-tip="Delete row" onMouseDown={function(e){e.preventDefault();editor.chain().focus().deleteRow().run();}}>&#x2715; Row</button>
+            <button className="del" data-tip="Delete column" onMouseDown={function(e){e.preventDefault();editor.chain().focus().deleteColumn().run();}}>&#x2715; Col</button>
+            <button className="del" data-tip="Delete table" onMouseDown={function(e){e.preventDefault();editor.chain().focus().deleteTable().run();}}>&#x2715; Table</button>
+          </div>;
+        })()}
         {slashOpen && slashPos && slashFiltered.length > 0 && (
           <div className="slash-menu" style={{position:"fixed",top:slashPos.top,left:slashPos.left}}>
             {slashFiltered.map(function(item, i) {
