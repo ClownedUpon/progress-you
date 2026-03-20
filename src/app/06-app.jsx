@@ -521,6 +521,7 @@ function App() {
       <style>{`
         @import url('./vendor/fonts.css');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+        html,body{overflow-x:hidden;}
         button{font-family:inherit;cursor:pointer;} button:hover{opacity:0.82;}
         input:focus,select:focus,textarea:focus{border-color:#8B7D6B!important;outline:none;}
         ::-webkit-scrollbar{width:5px;height:5px;}
@@ -529,7 +530,13 @@ function App() {
         .hov-card:hover{box-shadow:0 4px 14px rgba(0,0,0,0.1)!important;}
         .chip-hov:hover{filter:brightness(0.91);}
         .add-btn:hover{background:#EBE4D8!important;border-color:#9B8E80!important;}
-        .nav-p{padding:6px 13px;border-radius:8px;border:none;font-size:12px;font-weight:600;transition:all 0.18s;}
+        .nav-p{padding:6px 13px;border-radius:8px;border:none;font-size:12px;font-weight:600;transition:all 0.18s;white-space:nowrap;}
+        .nav-scroll{display:flex;gap:3;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;}
+        .nav-scroll::-webkit-scrollbar{display:none;}
+        .hdr-btn-label{display:inline;}
+        @media(max-width:1100px){.hdr-btn-label{display:none;}}
+        @media(max-width:1100px){.cap-btn span:nth-child(3){display:none!important;}}
+        @media(max-width:950px){.nav-p{padding:5px 9px;font-size:11px;}}
         .dz-active{outline:2px dashed #8B7D6B!important;outline-offset:3px;}
         .ProseMirror{outline:none;}
         .ProseMirror p.is-editor-empty:first-child::before{content:attr(data-placeholder);float:left;color:#C2B49E;pointer-events:none;height:0;font-style:italic;}
@@ -621,7 +628,7 @@ function App() {
       `}</style>
 
       {/* ── Header ── */}
-      <header style={{background:"#1C1714",color:"#F8F3EC",padding:"11px 24px",display:"flex",alignItems:"center",gap:12,position:"sticky",top:0,zIndex:100,boxShadow:"0 3px 20px rgba(0,0,0,0.38)"}}>
+      <header style={{background:"#1C1714",color:"#F8F3EC",padding:"8px 16px",display:"flex",alignItems:"center",gap:8,position:"sticky",top:0,zIndex:100,boxShadow:"0 3px 20px rgba(0,0,0,0.38)",flexWrap:"wrap"}}>
         <div style={{flexShrink:0,marginRight:4}}>
           <div style={{fontFamily:'"Playfair Display",serif',fontSize:18,fontWeight:700,lineHeight:1}}>
             Progress <em style={{fontStyle:"italic",color:"#C8A86B"}}>You</em>
@@ -629,35 +636,37 @@ function App() {
           <div style={{fontSize:9,color:"#5A4E46",letterSpacing:"1.6px",textTransform:"uppercase",marginTop:2}}>Notebook System</div>
         </div>
 
-        <nav style={{display:"flex",gap:3,background:"#2C2522",borderRadius:10,padding:3}}>
+        <nav style={{background:"#2C2522",borderRadius:10,padding:3,minWidth:0,flexShrink:1}}>
+          <div className="nav-scroll">
           {[["today","Today"],["timetable","Timetable"],["boards","Taskboards"],["notes","Notes"],["trackers","Trackers"],["calendar","Calendar"],["monthly","Log"],["stats","Stats"]].map(([v,l])=>(
             <button key={v} className="nav-p" onClick={()=>setView(v)}
               style={{background:view===v?"#F8F3EC":"transparent",color:view===v?"#1C1714":"#7A6C5E"}}>{l}</button>
           ))}
+          </div>
         </nav>
 
         {/* ⚡ Quick Capture — always visible */}
         <button className="cap-btn" onClick={()=>setShowCap(true)} title="Quick Capture (Ctrl+Space)">
-          <span style={{fontSize:14}}>⚡</span>
+          <span style={{fontSize:14}}>&#x26A1;</span>
           <span>Capture</span>
           <span style={{fontSize:9,opacity:0.6,fontWeight:400}}>Ctrl+Space</span>
         </button>
 
         {view==="timetable"&&(
-          <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:"auto"}}>
-            <button onClick={copyPrevWeek} style={{padding:"5px 11px",borderRadius:7,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600}}>↩ Copy prev</button>
-            <button onClick={()=>setWeek(w=>shiftWeek(w,-1))} style={{width:30,height:30,borderRadius:7,border:"1px solid #3A302A",background:"transparent",color:"#F8F3EC",fontSize:18}}>‹</button>
-            <span style={{fontSize:12,color:"#C2B49E",minWidth:178,textAlign:"center",fontWeight:500}}>{weekLabel(week)}</span>
-            <button onClick={()=>setWeek(w=>shiftWeek(w, 1))} style={{width:30,height:30,borderRadius:7,border:"1px solid #3A302A",background:"transparent",color:"#F8F3EC",fontSize:18}}>›</button>
-            <button onClick={()=>setWeek(mondayOf(new Date()))} style={{padding:"5px 11px",borderRadius:7,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600}}>Today</button>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:"auto",flexWrap:"wrap"}}>
+            <button onClick={copyPrevWeek} style={{padding:"5px 11px",borderRadius:7,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600}}>&#x21A9; <span className="hdr-btn-label">Copy prev</span></button>
+            <button onClick={()=>setWeek(w=>shiftWeek(w,-1))} style={{width:28,height:28,borderRadius:7,border:"1px solid #3A302A",background:"transparent",color:"#F8F3EC",fontSize:16}}>&#x2039;</button>
+            <span style={{fontSize:11,color:"#C2B49E",minWidth:0,textAlign:"center",fontWeight:500,whiteSpace:"nowrap"}}>{weekLabel(week)}</span>
+            <button onClick={()=>setWeek(w=>shiftWeek(w, 1))} style={{width:28,height:28,borderRadius:7,border:"1px solid #3A302A",background:"transparent",color:"#F8F3EC",fontSize:16}}>&#x203A;</button>
+            <button onClick={()=>setWeek(mondayOf(new Date()))} style={{padding:"5px 11px",borderRadius:7,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600}}><span className="hdr-btn-label">Today</span><span style={{display:"none"}} className="hdr-icon-only">&#x2302;</span></button>
           </div>
         )}
 
-        <div style={{display:"flex",gap:6,marginLeft:view==="timetable"?8:"auto",alignItems:"center"}}>
-          <button onClick={()=>setShowSearch(true)} title="Search (Ctrl+K)" style={{padding:"6px 12px",borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600}}>&#x1F50D; Search</button>
-          <button onClick={()=>setShowPin(v=>!v)} title={showPin?"Unpin dashboard":"Pin dashboard"} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #3A302A",background:showPin?"#3A302A":"transparent",color:showPin?"#C8A86B":"#7A6C5E",fontSize:11,fontWeight:600}}>&#x1F4CC; {showPin?"Unpin":"Pin"}</button>
-          <button onClick={()=>setShowIO(true)} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600}}>&#x21C5; Data</button>
-          <button onClick={()=>setShowSett(true)} style={{width:34,height:34,borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>⚙</button>
+        <div style={{display:"flex",gap:5,marginLeft:view==="timetable"?0:"auto",alignItems:"center",flexShrink:0}}>
+          <button onClick={()=>setShowSearch(true)} title="Search (Ctrl+K)" style={{padding:"6px 10px",borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>&#x1F50D;<span className="hdr-btn-label"> Search</span></button>
+          <button onClick={()=>setShowPin(v=>!v)} title={showPin?"Unpin dashboard":"Pin dashboard"} style={{padding:"6px 10px",borderRadius:8,border:"1px solid #3A302A",background:showPin?"#3A302A":"transparent",color:showPin?"#C8A86B":"#7A6C5E",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>&#x1F4CC;<span className="hdr-btn-label"> {showPin?"Unpin":"Pin"}</span></button>
+          <button onClick={()=>setShowIO(true)} title="Import / Export Data" style={{padding:"6px 10px",borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>&#x21C5;<span className="hdr-btn-label"> Data</span></button>
+          <button onClick={()=>setShowSett(true)} title="Settings" style={{width:32,height:32,borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>&#x2699;</button>
         </div>
       </header>
 
