@@ -542,14 +542,29 @@ var TaskChipNode = TiptapNode ? TiptapNode.create({
 
 function NoteImageView(props) {
   var path = props.node.attrs.path;
-  var src = "";
-  try {
-    if (path && window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) {
-      src = window.__TAURI__.core.convertFileSrc(path);
+  var imgSrc = useState(null);
+  var src = imgSrc[0];
+  var setSrc = imgSrc[1];
+  useEffect(function() {
+    if (!path) return;
+    var cancelled = false;
+    var ext = (path.split(".").pop() || "png").toLowerCase();
+    var mime = {png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",webp:"image/webp",svg:"image/svg+xml"}[ext] || "image/png";
+    var fs = window.__TAURI__ && window.__TAURI__.fs;
+    if (fs && fs.readFile) {
+      fs.readFile(path, {baseDir: undefined}).then(function(bytes) {
+        if (cancelled) return;
+        var binary = "";
+        var arr = new Uint8Array(bytes);
+        for (var i = 0; i < arr.length; i++) binary += String.fromCharCode(arr[i]);
+        setSrc("data:" + mime + ";base64," + btoa(binary));
+      }).catch(function(e) { console.error("Image load error:", e); });
     }
-  } catch(e) {}
+    return function() { cancelled = true; };
+  }, [path]);
   return React.createElement(NodeViewWrapper, {className: "note-img-wrap"},
-    React.createElement("img", {className: "note-img", src: src, "data-path": path, alt: "", draggable: false})
+    src ? React.createElement("img", {className: "note-img", src: src, "data-path": path, alt: "", draggable: false})
+         : React.createElement("div", {style: {padding: "12px 16px", color: "#9B8E80", fontSize: 12, fontStyle: "italic"}}, "Loading image\u2026")
   );
 }
 
@@ -699,12 +714,20 @@ var TIPTAP_BASE_EXTENSIONS = (function() {
 
 function restoreNoteImages(domEl) {
   if (!domEl) return;
+  var fs = window.__TAURI__ && window.__TAURI__.fs;
+  if (!fs || !fs.readFile) return;
   domEl.querySelectorAll("img[data-path]").forEach(function(img) {
-    try {
-      if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) {
-        img.src = window.__TAURI__.core.convertFileSrc(img.dataset.path);
-      }
-    } catch(e) {}
+    if (img.src && img.src.indexOf("data:") === 0) return;
+    var path = img.dataset.path;
+    if (!path) return;
+    var ext = (path.split(".").pop() || "png").toLowerCase();
+    var mime = {png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",webp:"image/webp",svg:"image/svg+xml"}[ext] || "image/png";
+    fs.readFile(path, {baseDir: undefined}).then(function(bytes) {
+      var binary = "";
+      var arr = new Uint8Array(bytes);
+      for (var i = 0; i < arr.length; i++) binary += String.fromCharCode(arr[i]);
+      img.src = "data:" + mime + ";base64," + btoa(binary);
+    }).catch(function(e) { console.error("Image load error:", e); });
   });
 }
 
