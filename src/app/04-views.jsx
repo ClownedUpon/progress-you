@@ -887,7 +887,19 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
           return true;
         }
         var head = event.target.closest(".note-collapse-head");
-        if (head) { var col = head.closest(".note-collapse"); if (col) col.toggleAttribute("data-open"); return true; }
+        if (head) {
+          var col = head.closest(".note-collapse");
+          if (col) {
+            var cPos = view.posAtDOM(col, 0);
+            var cResolved = view.state.doc.resolve(cPos);
+            var cNodePos = cResolved.before(cResolved.depth);
+            var cNode = view.state.doc.nodeAt(cNodePos);
+            if (cNode && cNode.type.name === "collapsible") {
+              view.dispatch(view.state.tr.setNodeMarkup(cNodePos, null, Object.assign({}, cNode.attrs, {open: !cNode.attrs.open})));
+            }
+          }
+          return true;
+        }
         return false;
       },
       handleKeyDown: function(view, event) {
@@ -1068,27 +1080,25 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
         <select className="tb-sel" defaultValue={EDITOR_FONTS[0].value} onChange={function(e){ if(editor) editor.chain().focus().setFontFamily(e.target.value).run(); }}>
           {EDITOR_FONTS.map(function(f){return <option key={f.value} value={f.value}>{f.label}</option>;})}
         </select>
-        <select className="tb-sel" defaultValue={EDITOR_SIZES[1].value} onChange={function(e){ if(editor) editor.chain().focus().setMark("fontSize",{size:e.target.value}).run(); }}>
-          {EDITOR_SIZES.map(function(s){return <option key={s.value} value={s.value}>{s.label}</option>;})}
+        <select className="tb-sel" value={fmtState.heading ? "h"+fmtState.heading : "p"} onChange={function(e){ if(!editor) return; var v=e.target.value; if(v==="p"){editor.chain().focus().setParagraph().run();} else if(v==="small"){editor.chain().focus().setParagraph().run(); editor.chain().focus().setMark("fontSize",{size:"11px"}).run();} else if(v==="large"){editor.chain().focus().setParagraph().run(); editor.chain().focus().setMark("fontSize",{size:"16px"}).run();} else {var lv=parseInt(v.replace("h","")); editor.chain().focus().toggleHeading({level:lv}).run();} }} title="Text format">
+          <option value="small">Small</option>
+          <option value="p">Body</option>
+          <option value="large">Large</option>
+          <option value="h3">Heading 3</option>
+          <option value="h2">Heading 2</option>
+          <option value="h1">Heading 1</option>
         </select>
         {sep}
-        <select className="tb-sel" value={fmtState.heading||""} onChange={function(e){ if(!editor) return; var v=parseInt(e.target.value); if(v) editor.chain().focus().toggleHeading({level:v}).run(); else editor.chain().focus().setParagraph().run(); }}>
-          <option value="">P</option>
-          <option value="1">H1</option>
-          <option value="2">H2</option>
-          <option value="3">H3</option>
-        </select>
-        {sep}
-        {[["bold","B",{fontWeight:700}],["italic","I",{fontStyle:"italic"}],["underline","U",{textDecoration:"underline"}]].map(function(arr){
-          var co=arr[0], l=arr[1], extra=arr[2];
-          return <button key={co} className={"tb-btn"+(fmtState[co]?" on":"")} onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus()["toggle"+co.charAt(0).toUpperCase()+co.slice(1)]().run();}} style={extra}>{l}</button>;
+        {[["bold","B",{fontWeight:700},"Bold"],["italic","I",{fontStyle:"italic"},"Italic"],["underline","U",{textDecoration:"underline"},"Underline"]].map(function(arr){
+          var co=arr[0], l=arr[1], extra=arr[2], tip=arr[3];
+          return <button key={co} className={"tb-btn"+(fmtState[co]?" on":"")} title={tip} onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus()["toggle"+co.charAt(0).toUpperCase()+co.slice(1)]().run();}} style={extra}>{l}</button>;
         })}
         {sep}
-        <button className={"tb-btn"+(fmtState.bulletList?" on":"")} onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleBulletList().run();}} style={{fontSize:13}}>&#x2022;</button>
-        <button className={"tb-btn"+(fmtState.orderedList?" on":"")} onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleOrderedList().run();}} style={{fontSize:11}}>1.</button>
+        <button className={"tb-btn"+(fmtState.bulletList?" on":"")} title="Bullet list" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleBulletList().run();}} style={{fontSize:13}}>&#x2022;</button>
+        <button className={"tb-btn"+(fmtState.orderedList?" on":"")} title="Numbered list" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().toggleOrderedList().run();}} style={{fontSize:11}}>1.</button>
         {sep}
         <div style={{position:"relative"}}>
-          <button className="tb-btn" onMouseDown={function(e){e.preventDefault();setShowClr(function(v){return !v;});}} style={{display:"flex",alignItems:"center",gap:4}}>
+          <button className="tb-btn" title="Text colour" onMouseDown={function(e){e.preventDefault();setShowClr(function(v){return !v;});}} style={{display:"flex",alignItems:"center",gap:4}}>
             <span style={{fontSize:13,fontWeight:700,color:selColor}}>A</span>
             <span style={{display:"block",width:12,height:3,borderRadius:2,background:selColor}}/>
             <span style={{fontSize:8,color:"#9B8E80"}}>&#9662;</span>
@@ -1136,7 +1146,7 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
         </div>
         <button className="tb-btn" title="Insert image (file reference)" onMouseDown={function(e){e.preventDefault();doInsertImage();}}>Image</button>
         {sep}
-        <button className="tb-btn" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().unsetAllMarks().run();}} style={{fontSize:11,color:"#9B8E80"}}>&#x2715; fmt</button>
+        <button className="tb-btn" title="Clear formatting" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().unsetAllMarks().run();}} style={{fontSize:11,color:"#9B8E80"}}>&#x2715; fmt</button>
         {sep}
         <button className="tb-btn" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().undo().run();}} title="Undo (Ctrl+Z)" style={{fontSize:12}}>&#x21A9;</button>
         <button className="tb-btn" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().redo().run();}} title="Redo (Ctrl+Shift+Z)" style={{fontSize:12}}>&#x21AA;</button>

@@ -577,15 +577,16 @@ function App() {
         .note-collapse{border:1px solid #E3D9CC;border-radius:8px;margin:8px 0;display:block;}
         .note-collapse-head{display:flex;align-items:center;gap:6px;padding:7px 12px;cursor:pointer;background:#F3EDE3;border-radius:8px;user-select:none;}
         .note-collapse[data-open] .note-collapse-head{border-radius:8px 8px 0 0;}
-        .note-collapse-arrow{font-size:9px;display:inline-block;transition:transform 0.18s;flex-shrink:0;color:#7A6C5E;}
+        .note-collapse-arrow{font-size:13px;display:inline-block;transition:transform 0.18s;flex-shrink:0;color:#7A6C5E;cursor:pointer;}
         .note-collapse[data-open] .note-collapse-arrow{transform:rotate(90deg);}
         .note-collapse-title{flex:1;font-weight:600;font-size:12px;color:#4A3F30;outline:none;min-width:0;}
-        .note-collapse-del{background:none;border:none;cursor:pointer;color:#C2B49E;font-size:13px;padding:0 0 0 4px;flex-shrink:0;line-height:1;}
-        .note-collapse-del:hover{color:#C43A3A;opacity:1;}
+        .note-collapse-del{background:none;border:none;cursor:pointer;color:#C43A3A;font-size:16px;font-weight:700;padding:0 2px 0 4px;flex-shrink:0;line-height:1;}
+        .note-collapse-del:hover{color:#A02020;opacity:1;}
         .note-collapse-body{display:none;padding:10px 14px;font-size:13px;border-top:1px solid #E3D9CC;outline:none;min-height:24px;}
         .note-collapse[data-open] .note-collapse-body{display:block;}
         .note-date-chip{display:inline-flex;align-items:center;gap:3px;background:#E3F0FB;color:#2A6FAD;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;cursor:pointer;user-select:none;}
         .note-task-chip{display:inline-flex;align-items:center;gap:3px;background:#F0EBF8;color:#6B3FC7;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;cursor:pointer;user-select:none;}
+        .note-img-wrap{display:block;}
         .note-img{max-width:100%;border-radius:8px;margin:6px 0;display:block;cursor:default;}
       `}</style>
 
