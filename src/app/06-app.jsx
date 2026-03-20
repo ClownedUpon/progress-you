@@ -588,8 +588,9 @@ function App() {
         .note-collapse[data-open] .note-collapse-body{display:block;}
         .note-date-chip{display:inline-flex;align-items:center;gap:3px;background:#E3F0FB;color:#2A6FAD;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;cursor:pointer;user-select:none;}
         .note-task-chip{display:inline-flex;align-items:center;gap:3px;background:#F0EBF8;color:#6B3FC7;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;cursor:pointer;user-select:none;}
-        .note-img-wrap{display:block;}
-        .note-img{max-width:100%;border-radius:8px;margin:6px 0;display:block;cursor:default;}
+        .note-img-wrap{display:block;margin:6px 0;}
+        .note-img{max-width:100%;border-radius:8px;display:block;cursor:pointer;}
+        .ProseMirror-selectednode .note-img-wrap{outline:none;}
         .ProseMirror ul[data-type="taskList"]{list-style:none;padding:0;margin:4px 0;}
         .ProseMirror ul[data-type="taskList"] li{display:flex;align-items:flex-start;gap:6px;margin:2px 0;}
         .ProseMirror ul[data-type="taskList"] li label{flex-shrink:0;margin-top:3px;cursor:pointer;}

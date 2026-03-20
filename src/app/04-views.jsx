@@ -947,6 +947,21 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
             }, 0);
           }
         }
+        // Backspace at start of empty paragraph after task list: just delete the paragraph
+        if (event.key === "Backspace" && !slashOpen) {
+          var bSel = view.state.selection;
+          var bPos = bSel.$from;
+          if (bSel.empty && bPos.parentOffset === 0 && bPos.parent.type.name === "paragraph" && bPos.parent.content.size === 0) {
+            var bBefore = bPos.before(bPos.depth);
+            if (bBefore > 0) {
+              var nodeBefore = view.state.doc.resolve(bBefore).nodeBefore;
+              if (nodeBefore && nodeBefore.type.name === "taskList") {
+                view.dispatch(view.state.tr.delete(bBefore, bBefore + bPos.parent.nodeSize));
+                return true;
+              }
+            }
+          }
+        }
         return false;
       },
       handleTextInput: function(view, from, to, text) {
@@ -1163,10 +1178,10 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
             )}
           </div>}
           {sep}
-          {isVis("alignL")&&<button className={"tb-btn"+(fmtState.textAlign==="left"?" on":"")} data-tip="Align Left" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().setTextAlign("left").run();}} style={{fontSize:13,lineHeight:1}}>&#x2261;</button>}
-          {isVis("alignC")&&<button className={"tb-btn"+(fmtState.textAlign==="center"?" on":"")} data-tip="Align Centre" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().setTextAlign("center").run();}} style={{fontSize:11,lineHeight:1,letterSpacing:1}}>&#x2550;</button>}
-          {isVis("alignR")&&<button className={"tb-btn"+(fmtState.textAlign==="right"?" on":"")} data-tip="Align Right" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().setTextAlign("right").run();}} style={{fontSize:13,lineHeight:1,transform:"scaleX(-1)"}}>&#x2261;</button>}
-          {isVis("alignJ")&&<button className={"tb-btn"+(fmtState.textAlign==="justify"?" on":"")} data-tip="Justify" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().setTextAlign("justify").run();}} style={{fontSize:11,lineHeight:1}}>&#x2630;</button>}
+          {isVis("alignL")&&<button className={"tb-btn"+(fmtState.textAlign==="left"?" on":"")} data-tip="Align Left" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().setTextAlign("left").run();}}><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="2" width="14" height="2" rx="0.5"/><rect x="1" y="6" width="10" height="2" rx="0.5"/><rect x="1" y="10" width="14" height="2" rx="0.5"/></svg></button>}
+          {isVis("alignC")&&<button className={"tb-btn"+(fmtState.textAlign==="center"?" on":"")} data-tip="Align Centre" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().setTextAlign("center").run();}}><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="2" width="14" height="2" rx="0.5"/><rect x="3" y="6" width="10" height="2" rx="0.5"/><rect x="1" y="10" width="14" height="2" rx="0.5"/></svg></button>}
+          {isVis("alignR")&&<button className={"tb-btn"+(fmtState.textAlign==="right"?" on":"")} data-tip="Align Right" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().setTextAlign("right").run();}}><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="2" width="14" height="2" rx="0.5"/><rect x="5" y="6" width="10" height="2" rx="0.5"/><rect x="1" y="10" width="14" height="2" rx="0.5"/></svg></button>}
+          {isVis("alignJ")&&<button className={"tb-btn"+(fmtState.textAlign==="justify"?" on":"")} data-tip="Justify" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().setTextAlign("justify").run();}}><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="2" width="14" height="2" rx="0.5"/><rect x="1" y="6" width="14" height="2" rx="0.5"/><rect x="1" y="10" width="14" height="2" rx="0.5"/></svg></button>}
           {sep}
           {isVis("clearFmt")&&<button className="tb-btn" data-tip="Clear Formatting" onMouseDown={function(e){e.preventDefault(); if(editor) editor.chain().focus().unsetAllMarks().clearNodes().run();}} style={{fontSize:11,color:"#9B8E80"}}>&#x2715; fmt</button>}
           <div style={{marginLeft:"auto",fontSize:11,color:saved?"#1A7A43":"#9B8E80",fontWeight:500}}>{saved?"\u2713 Saved":"Saving\u2026"}</div>
