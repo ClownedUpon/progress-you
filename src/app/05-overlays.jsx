@@ -445,7 +445,7 @@ function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClo
           </div>
         )}
 
-        {/* Pinned Note */}
+        {/* Pin a Note */}
         <div style={{padding:"8px 12px 10px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
             <div style={{fontSize:9,fontWeight:700,color:"#4A3F30",letterSpacing:"0.6px",textTransform:"uppercase"}}>Pinned Note</div>
@@ -475,14 +475,9 @@ function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClo
             var allN=Object.values(notes||{}).flat();
             var pn=allN.find(function(n){return n.id===pinnedNoteId;});
             if(!pn) return React.createElement("div",{style:{fontSize:10,color:"#4A3F30",fontStyle:"italic"}},"Note not found.");
-            var preview=pn.content||"";
-            var tmp=document.createElement("div"); tmp.innerHTML=preview;
-            var text=tmp.textContent||tmp.innerText||"";
-            if(text.length>300) text=text.slice(0,300)+"\u2026";
-            return React.createElement("div",{style:{background:"#2C2420",borderRadius:6,padding:"8px 10px",cursor:"pointer"},
-              onClick:function(){if(navigateToFresh||navigateTo){(navigateToFresh||navigateTo)({type:"note",id:pn.id});}}},
-              React.createElement("div",{style:{fontSize:11,fontWeight:600,color:"#C8A86B",marginBottom:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},pn.title||"Untitled"),
-              React.createElement("div",{style:{fontSize:10,color:"#9B8E80",lineHeight:1.5,maxHeight:120,overflowY:"auto",whiteSpace:"pre-wrap",wordBreak:"break-word"}},text)
+            return React.createElement("div",{style:{background:"#2C2420",borderRadius:6,padding:"6px 10px",display:"flex",alignItems:"center",gap:8}},
+              React.createElement("span",{style:{fontSize:11,color:"#C8A86B",fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},pn.title||"Untitled"),
+              React.createElement("span",{style:{fontSize:9,color:"#4A3F30"}},"floating")
             );
           })()}
         </div>
@@ -493,6 +488,71 @@ function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClo
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function NoteFloatOverlay({noteId,notes,onClose,navigateTo,navigateToFresh}) {
+  var allN=Object.values(notes||{}).flat();
+  var note=allN.find(function(n){return n.id===noteId;});
+  var pos=useState({x:null,y:null});
+  var posVal=pos[0]; var setPos=pos[1];
+  var isDragging=useState(false);
+  var dragging=isDragging[0]; var setDragging=isDragging[1];
+  var dragRef=React.useRef(null);
+  var panelRef=React.useRef(null);
+  var contentRef=React.useRef(null);
+
+  function onHeaderPointerDown(e){
+    if(e.button!==0) return;
+    e.preventDefault();
+    var panel=panelRef.current; if(!panel) return;
+    var rect=panel.getBoundingClientRect();
+    var offX=e.clientX-rect.left, offY=e.clientY-rect.top;
+    dragRef.current={offX:offX,offY:offY};
+    setDragging(true);
+    function onMove(ev){
+      var d=dragRef.current;
+      setPos({x:Math.max(0,Math.min(window.innerWidth-rect.width,ev.clientX-d.offX)),
+              y:Math.max(0,Math.min(window.innerHeight-rect.height,ev.clientY-d.offY))});
+    }
+    function onUp(){ setDragging(false); window.removeEventListener("pointermove",onMove); window.removeEventListener("pointerup",onUp); }
+    window.addEventListener("pointermove",onMove);
+    window.addEventListener("pointerup",onUp);
+  }
+
+  useEffect(function(){
+    if(contentRef.current&&note){
+      contentRef.current.innerHTML=note.content||"<p style='color:#9B8E80;font-style:italic'>Empty note</p>";
+      if(typeof restoreNoteImages==="function") restoreNoteImages(contentRef.current);
+    }
+  },[noteId,note&&note.content]);
+
+  var posStyle=posVal.x!==null?{left:posVal.x,top:posVal.y}:{left:20,bottom:20};
+
+  if(!note) return null;
+  return (
+    <div ref={panelRef} style={{
+      position:"fixed",...posStyle,
+      width:340,maxHeight:"60vh",
+      background:"#FDFAF6",color:"#1C1714",
+      borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.25)",border:"1px solid #E3D9CC",
+      zIndex:790,display:"flex",flexDirection:"column",
+      fontFamily:'"DM Sans",sans-serif',fontSize:12,
+      overflow:"hidden",
+      cursor:dragging?"grabbing":"default",
+      userSelect:dragging?"none":"auto",
+    }}>
+      <div onPointerDown={onHeaderPointerDown}
+        style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+          padding:"8px 12px",borderBottom:"1px solid #E3D9CC",cursor:"grab",flexShrink:0,background:"#F3EDE3"}}>
+        <span style={{fontSize:12,fontWeight:700,color:"#1C1714",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{note.title||"Untitled"}</span>
+        <button onPointerDown={function(e){e.stopPropagation();}} onClick={function(){if(navigateToFresh||navigateTo){(navigateToFresh||navigateTo)({type:"note",id:note.id});}}}
+          style={{background:"none",border:"none",cursor:"pointer",color:"#9B8E80",fontSize:10,padding:"2px 6px",marginRight:4}} title="Open in editor">{"\u2197"}</button>
+        <button onPointerDown={function(e){e.stopPropagation();}} onClick={onClose}
+          style={{background:"none",border:"none",cursor:"pointer",color:"#C43A3A",fontSize:16,lineHeight:1,padding:"0 2px",flexShrink:0,fontWeight:700}}>&#xd7;</button>
+      </div>
+      <div ref={contentRef} style={{overflowY:"auto",flex:1,padding:"12px 14px",fontSize:13,lineHeight:1.6,color:"#1C1714",wordBreak:"break-word"}}/>
     </div>
   );
 }
