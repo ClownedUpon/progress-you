@@ -89,6 +89,8 @@ function App() {
   const [lastBoardSec, setLastBoardSec] = useState(null);
   const [showPin,      setShowPin]      = useState(false);
   const [pinnedNoteId, setPinnedNoteId] = useState(null);
+  const [showNotePicker, setShowNotePicker] = useState(false);
+  const [notePickerQ, setNotePickerQ] = useState("");
   const [lastNoteKey,  setLastNoteKey]  = useState({sec:null,id:null});
   const [templates,    setTemplates]    = useState([]);
   const [setBlocks,    setSetBlocks]    = useState([]);
@@ -666,7 +668,28 @@ function App() {
 
         <div style={{display:"flex",gap:5,marginLeft:view==="timetable"?0:"auto",alignItems:"center",flexShrink:0}}>
           <button onClick={()=>setShowSearch(true)} title="Search (Ctrl+K)" style={{padding:"6px 10px",borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>&#x1F50D;<span className="hdr-btn-label"> Search</span></button>
-          <button onClick={()=>setShowPin(v=>!v)} title={showPin?"Unpin dashboard":"Pin dashboard"} style={{padding:"6px 10px",borderRadius:8,border:"1px solid #3A302A",background:showPin?"#3A302A":"transparent",color:showPin?"#C8A86B":"#7A6C5E",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>&#x1F4CC;<span className="hdr-btn-label"> {showPin?"Unpin":"Pin"}</span></button>
+          <button onClick={()=>setShowPin(v=>!v)} title={showPin?"Hide today dashboard":"Show today dashboard"} style={{padding:"6px 10px",borderRadius:8,border:"1px solid #3A302A",background:showPin?"#3A302A":"transparent",color:showPin?"#C8A86B":"#7A6C5E",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>&#x1F4CC;<span className="hdr-btn-label"> Today</span></button>
+          <div style={{position:"relative"}}>
+            <button onClick={()=>{if(pinnedNoteId){setPinnedNoteId(null);setShowNotePicker(false);}else{setShowNotePicker(v=>!v);}}} title={pinnedNoteId?"Unpin note":"Pin a note"} style={{padding:"6px 10px",borderRadius:8,border:"1px solid #3A302A",background:pinnedNoteId?"#3A302A":"transparent",color:pinnedNoteId?"#C8A86B":"#7A6C5E",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>&#x1F4DD;<span className="hdr-btn-label"> Note</span></button>
+            {showNotePicker&&!pinnedNoteId&&(()=>{
+              var allNotes=Object.values(notes||{}).flat();
+              var q=notePickerQ.toLowerCase();
+              var filtered=q?allNotes.filter(function(n){return n.title&&n.title.toLowerCase().indexOf(q)>=0;}):allNotes.slice(0,20);
+              return <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:300,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:10,padding:8,minWidth:260,maxHeight:280,boxShadow:"0 6px 24px rgba(0,0,0,0.18)"}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:6}}>Pin a Note</div>
+                <input value={notePickerQ} onChange={e=>setNotePickerQ(e.target.value)} placeholder="Search notes\u2026" autoFocus
+                  style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #E3D9CC",fontSize:11,marginBottom:6,outline:"none"}}/>
+                <div style={{overflowY:"auto",maxHeight:200}}>
+                {filtered.length===0&&<div style={{fontSize:11,color:"#9B8E80",padding:"4px 2px"}}>No notes found.</div>}
+                {filtered.map(function(n){return <div key={n.id} onClick={function(){setPinnedNoteId(n.id);setShowNotePicker(false);setNotePickerQ("");}}
+                  onMouseEnter={function(e){e.currentTarget.style.background="#EBE4D8";}}
+                  onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}
+                  style={{fontSize:12,padding:"5px 8px",borderRadius:6,cursor:"pointer",color:"#1C1714",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {n.title||"Untitled"}</div>;})}
+                </div>
+              </div>;
+            })()}
+          </div>
           <button onClick={()=>setShowIO(true)} title="Import / Export Data" style={{padding:"6px 10px",borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>&#x21C5;<span className="hdr-btn-label"> Data</span></button>
           <button onClick={()=>setShowSett(true)} title="Settings" style={{width:32,height:32,borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>&#x2699;</button>
         </div>
@@ -722,8 +745,8 @@ function App() {
       {ctxMenu&&<ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={ctxMenu.items} onClose={()=>setCtxMenu(null)}/>}
       {navStack.length>0&&<NavOverlay stack={navStack} tasks={tasks} notes={notes} trackers={trackers} byId={byId} updateTask={updateTask} completeTask={completeTask} toggleTrackerDay={toggleTrackerDay} onClose={()=>setNavStack([])} onNavigateToLevel={i=>setNavStack(s=>s.slice(0,i+1))}/>}
     </div>
-      {showPin&&<PinOverlay tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} trackers={trackers} toggleTrackerDay={toggleTrackerDay} onClose={()=>setShowPin(false)} navigateTo={navigateTo} navigateToFresh={navigateToFresh} navigateToDate={navigateToDate} notes={notes} pinnedNoteId={pinnedNoteId} setPinnedNoteId={setPinnedNoteId}/>}
-      {pinnedNoteId&&<NoteFloatOverlay noteId={pinnedNoteId} notes={notes} onClose={()=>setPinnedNoteId(null)} navigateTo={navigateTo} navigateToFresh={navigateToFresh}/>}
+      {showPin&&<PinOverlay tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} trackers={trackers} toggleTrackerDay={toggleTrackerDay} onClose={()=>setShowPin(false)} navigateTo={navigateTo} navigateToFresh={navigateToFresh} navigateToDate={navigateToDate}/>}
+      {pinnedNoteId&&<NoteFloatOverlay noteId={pinnedNoteId} notes={notes} onClose={()=>setPinnedNoteId(null)} onOpenNote={function(nid){var allN=Object.values(notes||{}).flat();var n=allN.find(function(x){return x.id===nid;});if(n){setLastNoteKey({sec:n.parentId||sections[0]?.id,id:nid});setView("notes");}}}/>}
     </CtxMenuCtx.Provider>
     </NavCtx.Provider>
   );

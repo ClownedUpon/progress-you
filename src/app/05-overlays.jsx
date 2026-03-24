@@ -286,11 +286,9 @@ function NotePanel({noteId,allNotes,tasks,byId}) {
   );
 }
 
-function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClose,navigateTo,navigateToDate,navigateToFresh,notes,pinnedNoteId,setPinnedNoteId}) {
+function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClose,navigateTo,navigateToDate,navigateToFresh}) {
   const [pos,  setPos]  = useState({x:null,y:null}); // null = anchored bottom-right
   const [dragging,setDragging]=useState(false);
-  const [noteSearch, setNoteSearch] = useState("");
-  const [showNotePicker, setShowNotePicker] = useState(false);
   const dragRef=React.useRef(null);
   const panelRef=React.useRef(null);
 
@@ -445,44 +443,7 @@ function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClo
           </div>
         )}
 
-        {/* Pin a Note */}
-        <div style={{padding:"8px 12px 10px"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
-            <div style={{fontSize:9,fontWeight:700,color:"#4A3F30",letterSpacing:"0.6px",textTransform:"uppercase"}}>Pinned Note</div>
-            {pinnedNoteId&&<button onClick={function(){setPinnedNoteId(null);}} style={{background:"none",border:"none",cursor:"pointer",color:"#7A6C5E",fontSize:11,padding:0}} title="Unpin note">{"\u2715"}</button>}
-          </div>
-          {(function(){
-            if(!pinnedNoteId){
-              if(showNotePicker){
-                var allNotes=Object.values(notes||{}).flat();
-                var q=noteSearch.toLowerCase();
-                var filtered=q?allNotes.filter(function(n){return n.title&&n.title.toLowerCase().indexOf(q)>=0;}):allNotes.slice(0,15);
-                return React.createElement("div",{style:{background:"#2C2420",borderRadius:6,padding:6}},
-                  React.createElement("input",{value:noteSearch,onChange:function(e){setNoteSearch(e.target.value);},placeholder:"Search notes\u2026",autoFocus:true,
-                    style:{width:"100%",padding:"5px 8px",borderRadius:5,border:"1px solid #3A302A",background:"#1C1714",color:"#F8F3EC",fontSize:11,marginBottom:4,outline:"none"}}),
-                  filtered.length===0?React.createElement("div",{style:{fontSize:10,color:"#4A3F30",padding:"4px 2px"}},"No notes found."):null,
-                  filtered.map(function(n){return React.createElement("div",{key:n.id,onClick:function(){setPinnedNoteId(n.id);setShowNotePicker(false);setNoteSearch("");},
-                    onMouseEnter:function(e){e.currentTarget.style.background="#3A302A";},
-                    onMouseLeave:function(e){e.currentTarget.style.background="transparent";},
-                    style:{fontSize:11,padding:"4px 6px",borderRadius:4,cursor:"pointer",color:"#EBE4D8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},
-                    n.title||"Untitled");})
-                );
-              }
-              return React.createElement("button",{onClick:function(){setShowNotePicker(true);},
-                style:{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px dashed #3A302A",background:"transparent",color:"#4A3F30",fontSize:11,cursor:"pointer",textAlign:"center"}},
-                "+ Pin a note");
-            }
-            var allN=Object.values(notes||{}).flat();
-            var pn=allN.find(function(n){return n.id===pinnedNoteId;});
-            if(!pn) return React.createElement("div",{style:{fontSize:10,color:"#4A3F30",fontStyle:"italic"}},"Note not found.");
-            return React.createElement("div",{style:{background:"#2C2420",borderRadius:6,padding:"6px 10px",display:"flex",alignItems:"center",gap:8}},
-              React.createElement("span",{style:{fontSize:11,color:"#C8A86B",fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},pn.title||"Untitled"),
-              React.createElement("span",{style:{fontSize:9,color:"#4A3F30"}},"floating")
-            );
-          })()}
-        </div>
-
-        {blocks.length===0&&activeTasks.length===0&&pinTrackers.length===0&&!pinnedNoteId&&(
+        {blocks.length===0&&activeTasks.length===0&&pinTrackers.length===0&&(
           <div style={{padding:"20px 12px",textAlign:"center",color:"#4A3F30",fontSize:11}}>
             No blocks, tasks, or trackers today.
           </div>
@@ -492,7 +453,7 @@ function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClo
   );
 }
 
-function NoteFloatOverlay({noteId,notes,onClose,navigateTo,navigateToFresh}) {
+function NoteFloatOverlay({noteId,notes,onClose,onOpenNote}) {
   var allN=Object.values(notes||{}).flat();
   var note=allN.find(function(n){return n.id===noteId;});
   var pos=useState({x:null,y:null});
@@ -547,7 +508,7 @@ function NoteFloatOverlay({noteId,notes,onClose,navigateTo,navigateToFresh}) {
         style={{display:"flex",alignItems:"center",justifyContent:"space-between",
           padding:"8px 12px",borderBottom:"1px solid #E3D9CC",cursor:"grab",flexShrink:0,background:"#F3EDE3"}}>
         <span style={{fontSize:12,fontWeight:700,color:"#1C1714",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{note.title||"Untitled"}</span>
-        <button onPointerDown={function(e){e.stopPropagation();}} onClick={function(){if(navigateToFresh||navigateTo){(navigateToFresh||navigateTo)({type:"note",id:note.id});}}}
+        <button onPointerDown={function(e){e.stopPropagation();}} onClick={function(){if(onOpenNote)onOpenNote(note.id);}}
           style={{background:"none",border:"none",cursor:"pointer",color:"#9B8E80",fontSize:10,padding:"2px 6px",marginRight:4}} title="Open in editor">{"\u2197"}</button>
         <button onPointerDown={function(e){e.stopPropagation();}} onClick={onClose}
           style={{background:"none",border:"none",cursor:"pointer",color:"#C43A3A",fontSize:16,lineHeight:1,padding:"0 2px",flexShrink:0,fontWeight:700}}>&#xd7;</button>
