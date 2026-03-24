@@ -746,7 +746,7 @@ function App() {
       {navStack.length>0&&<NavOverlay stack={navStack} tasks={tasks} notes={notes} trackers={trackers} byId={byId} updateTask={updateTask} completeTask={completeTask} toggleTrackerDay={toggleTrackerDay} onClose={()=>setNavStack([])} onNavigateToLevel={i=>setNavStack(s=>s.slice(0,i+1))}/>}
     </div>
       {showPin&&<PinOverlay tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} trackers={trackers} toggleTrackerDay={toggleTrackerDay} onClose={()=>setShowPin(false)} navigateTo={navigateTo} navigateToFresh={navigateToFresh} navigateToDate={navigateToDate}/>}
-      {pinnedNoteId&&<NoteFloatOverlay noteId={pinnedNoteId} notes={notes} onClose={()=>setPinnedNoteId(null)} onOpenNote={function(nid){var allN=Object.values(notes||{}).flat();var n=allN.find(function(x){return x.id===nid;});if(n){setLastNoteKey({sec:n.parentId||sections[0]?.id,id:nid});setView("notes");}}}/>}
+      {pinnedNoteId&&<NoteFloatOverlay noteId={pinnedNoteId} notes={notes} onClose={()=>setPinnedNoteId(null)} onOpenNote={function(nid){var secKey=null;var entries=Object.entries(notes||{});for(var i=0;i<entries.length;i++){if(entries[i][1].some(function(n){return n.id===nid;})){secKey=entries[i][0];break;}}setLastNoteKey({sec:secKey||sections[0]?.id,id:nid});setView("notes");}}/>}
     </CtxMenuCtx.Provider>
     </NavCtx.Provider>
   );

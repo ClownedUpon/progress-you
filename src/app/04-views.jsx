@@ -210,8 +210,6 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
   const [showTmplDrop, setShowTmplDrop] = useState(false);
   const [palDrag,      setPalDrag]      = useState(null);
   const palDragRef = React.useRef(null);
-  const [sbDragOver,   setSbDragOver]  = useState(null);
-  const sbDragRef = React.useRef(null);
 
   // ── Palette drag (set block → day column)
   function startPalDrag(e, snippet){
@@ -313,23 +311,22 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
         <div style={{marginBottom:14,padding:"8px 12px",background:"#EBE4D8",borderRadius:10,border:"1px solid #D6CEC3"}}>
           <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:7}}>Set Blocks — drag to place</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {(setBlocks||[]).map(function(sb){
+            {(setBlocks||[]).map(function(sb,idx){
               var sec=sb.sectionId?byId[sb.sectionId]:null;
               var bg=sec?sec.color:"#8B7D6B";
-              var isDragTarget=sbDragOver===sb.id&&sbDragRef.current!==sb.id;
               return (
-                <div key={sb.id} style={{display:"inline-flex",alignItems:"center",gap:3}}
-                  draggable={true}
-                  onDragStart={function(e){sbDragRef.current=sb.id;e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",sb.id);}}
-                  onDragOver={function(e){e.preventDefault();e.dataTransfer.dropEffect="move";setSbDragOver(sb.id);}}
-                  onDragLeave={function(){setSbDragOver(function(v){return v===sb.id?null:v;});}}
-                  onDrop={function(e){e.preventDefault();var did=sbDragRef.current;if(did&&did!==sb.id){reorderSetBlock(did,sb.id);}sbDragRef.current=null;setSbDragOver(null);}}
-                  onDragEnd={function(){sbDragRef.current=null;setSbDragOver(null);}}>
-                  <div
+                <div key={sb.id} style={{display:"inline-flex",alignItems:"center",gap:3}}>
+                  <div onPointerDown={function(e){startPalDrag(e,sb);}}
+                    onContextMenu={function(e){if(!openCtx)return;openCtx(e,[
+                      {label:"Add to\u2026",submenu:DAYS.map(function(d){return{label:d,action:function(){upsertBlock(d,{...sb,id:uid(),linkedItems:[]});}};})},
+                      idx>0?{label:"\u2190 Move left",action:function(){reorderSetBlock(sb.id,(setBlocks||[])[idx-1].id);}}:null,
+                      idx<(setBlocks||[]).length-1?{label:"\u2192 Move right",action:function(){reorderSetBlock(sb.id,(setBlocks||[])[idx+1].id);}}:null,
+                      {divider:true},
+                      {label:"Remove",danger:true,action:function(){removeSetBlock(sb.id);}},
+                    ].filter(Boolean));}}
                     style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:20,
-                      background:isDragTarget?bg+"44":bg+"22",border:isDragTarget?"2px solid "+bg:"1px solid "+bg+"50",
-                      cursor:"grab",userSelect:"none",fontSize:11,fontWeight:600,color:bg,
-                      transition:"all 0.15s"}}>
+                      background:bg+"22",border:"1px solid "+bg+"50",
+                      cursor:"grab",userSelect:"none",fontSize:11,fontWeight:600,color:bg}}>
                     {sb.label||(sec?.label)||(sb.type==="break"?"Break":"Block")}
                     <span style={{fontSize:9,color:bg+"99"}}>{"\u2022"} {sb.start}{"\u2013"}{sb.end}</span>
                   </div>
@@ -705,6 +702,7 @@ function NotesView({sections,byId,getSectionNotes,addNote,updateNoteField,delete
   const openCtx = React.useContext(CtxMenuCtx);
   const [secId,       setSecId]       =useState(()=>{ const id=initialSecId; return sections.find(s=>s.id===id)?id:sections[0]?.id||""; });
   const [selNoteId,   setSelNoteId]   =useState(initialNoteId||null);
+  useEffect(function(){if(initialSecId&&sections.find(function(s){return s.id===initialSecId;})){setSecId(initialSecId);}if(initialNoteId){setSelNoteId(initialNoteId);}},[initialSecId,initialNoteId]);
   const [collapsed,   setCollapsed]   =useState({});
   const [confirmDel,  setConfirmDel]  =useState(null);
   const [renameTrigger,setRenameTrigger]=useState(null);
