@@ -210,8 +210,8 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
   const [showTmplDrop, setShowTmplDrop] = useState(false);
   const [palDrag,      setPalDrag]      = useState(null);
   const palDragRef = React.useRef(null);
-  const [sbDragId,     setSbDragId]    = useState(null);
   const [sbDragOver,   setSbDragOver]  = useState(null);
+  const sbDragRef = React.useRef(null);
 
   // ── Palette drag (set block → day column)
   function startPalDrag(e, snippet){
@@ -316,20 +316,20 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
             {(setBlocks||[]).map(function(sb){
               var sec=sb.sectionId?byId[sb.sectionId]:null;
               var bg=sec?sec.color:"#8B7D6B";
-              var isDragTarget=sbDragOver===sb.id&&sbDragId!==sb.id;
+              var isDragTarget=sbDragOver===sb.id&&sbDragRef.current!==sb.id;
               return (
                 <div key={sb.id} style={{display:"inline-flex",alignItems:"center",gap:3}}
                   draggable={true}
-                  onDragStart={function(e){setSbDragId(sb.id);e.dataTransfer.effectAllowed="move";}}
-                  onDragOver={function(e){e.preventDefault();setSbDragOver(sb.id);}}
-                  onDragLeave={function(){setSbDragOver(null);}}
-                  onDrop={function(e){e.preventDefault();if(sbDragId&&sbDragId!==sb.id){reorderSetBlock(sbDragId,sb.id);}setSbDragId(null);setSbDragOver(null);}}
-                  onDragEnd={function(){setSbDragId(null);setSbDragOver(null);}}>
-                  <div onPointerDown={function(e){if(!sbDragId)startPalDrag(e,sb);}}
+                  onDragStart={function(e){sbDragRef.current=sb.id;e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",sb.id);}}
+                  onDragOver={function(e){e.preventDefault();e.dataTransfer.dropEffect="move";setSbDragOver(sb.id);}}
+                  onDragLeave={function(){setSbDragOver(function(v){return v===sb.id?null:v;});}}
+                  onDrop={function(e){e.preventDefault();var did=sbDragRef.current;if(did&&did!==sb.id){reorderSetBlock(did,sb.id);}sbDragRef.current=null;setSbDragOver(null);}}
+                  onDragEnd={function(){sbDragRef.current=null;setSbDragOver(null);}}>
+                  <div
                     style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:20,
-                      background:isDragTarget?bg+"44":bg+"22",border:"1px solid "+(isDragTarget?bg:bg+"50"),
+                      background:isDragTarget?bg+"44":bg+"22",border:isDragTarget?"2px solid "+bg:"1px solid "+bg+"50",
                       cursor:"grab",userSelect:"none",fontSize:11,fontWeight:600,color:bg,
-                      opacity:sbDragId===sb.id?0.4:1,transition:"all 0.15s"}}>
+                      transition:"all 0.15s"}}>
                     {sb.label||(sec?.label)||(sb.type==="break"?"Break":"Block")}
                     <span style={{fontSize:9,color:bg+"99"}}>{"\u2022"} {sb.start}{"\u2013"}{sb.end}</span>
                   </div>
@@ -1462,6 +1462,8 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
   const [selId,setSelId]=useState(null);
   const [showCreate,setShowCreate]=useState(false);
   const [editId,setEditId]=useState(null);
+  const [confirmDelId,setConfirmDelId]=useState(null);
+  const [showArchived,setShowArchived]=useState(false);
   const [showAddTask,setShowAddTask]=useState(false);
   const [showPinTask,setShowPinTask]=useState(false);
   const [showPinNote,setShowPinNote]=useState(false);
@@ -1590,6 +1592,26 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
             <div style={{fontSize:11,marginTop:4}}>Create one to start tracking habits</div>
           </div>
         )}
+        {(function(){
+          var archived=trackers.filter(function(t){return t.archived;});
+          if(archived.length===0) return null;
+          return <div style={{borderTop:"1px solid #E3D9CC",marginTop:12,paddingTop:8}}>
+            <button onClick={function(){setShowArchived(function(v){return !v;});}}
+              style={{background:"none",border:"none",cursor:"pointer",fontSize:10,fontWeight:700,color:"#9B8E80",letterSpacing:"0.5px",textTransform:"uppercase",padding:"4px 4px",display:"flex",alignItems:"center",gap:4}}>
+              <span style={{transform:showArchived?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.15s",display:"inline-block"}}>{"\u25B6"}</span>
+              Archived ({archived.length})
+            </button>
+            {showArchived&&archived.map(function(trk){return <div key={trk.id}
+              style={{display:"flex",alignItems:"center",gap:8,padding:"6px 12px",borderRadius:9,opacity:0.6}}>
+              <div style={{width:10,height:10,borderRadius:3,background:trk.color,flexShrink:0}}/>
+              <span style={{fontSize:12,color:"#9B8E80",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{trk.title}</span>
+              <button onClick={function(){updateTracker(trk.id,{archived:false});}}
+                style={{background:"none",border:"none",cursor:"pointer",color:"#2A7A8A",fontSize:10,fontWeight:600,padding:"2px 6px"}}>Restore</button>
+              <button onClick={function(){setConfirmDelId(trk.id);}}
+                style={{background:"none",border:"none",cursor:"pointer",color:"#C43A3A",fontSize:10,fontWeight:600,padding:"2px 6px"}}>Delete</button>
+            </div>;})}
+          </div>;
+        })()}
       </div>
       {/* Right: Selected tracker detail */}
       <div style={{flex:1,overflowY:"auto"}}>
@@ -1606,7 +1628,7 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
               <div style={{flex:1}}/>
               <button onClick={()=>setEditId(sel.id)} style={{...S.btnGhost,fontSize:11,padding:"4px 12px"}}>Edit</button>
               <button onClick={function(){archiveTracker(sel.id);setSelId(null);}} style={{...S.btnGhost,fontSize:11,padding:"4px 12px",color:"#9B8E80"}}>Archive</button>
-              <button onClick={function(){if(confirm("Delete tracker \""+sel.title+"\"? This cannot be undone.")){deleteTracker(sel.id);setSelId(null);}}} style={{...S.btnGhost,fontSize:11,padding:"4px 12px",color:"#C43A3A"}}>Delete</button>
+              <button onClick={function(){setConfirmDelId(sel.id);}} style={{...S.btnGhost,fontSize:11,padding:"4px 12px",color:"#C43A3A"}}>Delete</button>
             </div>
 
             {/* Pinned Tasks — active linked tasks (done tasks hidden) */}
@@ -1779,6 +1801,23 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
           }}
           initialTitle={sel.title}/>
       )}
+      {/* Delete confirmation overlay */}
+      {confirmDelId&&(function(){
+        var trk=trackers.find(function(t){return t.id===confirmDelId;});
+        if(!trk) return null;
+        return <Overlay onClose={function(){setConfirmDelId(null);}}>
+          <div style={{maxWidth:360}}>
+            <h3 style={{fontFamily:'"Playfair Display",serif',fontSize:18,marginBottom:12}}>Delete Tracker</h3>
+            <p style={{fontSize:13,color:"#6B5E4E",marginBottom:16}}>
+              Delete <strong>{trk.title}</strong>? All completion history will be lost. This cannot be undone.
+            </p>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button onClick={function(){setConfirmDelId(null);}} style={S.btnGhost}>Cancel</button>
+              <button onClick={function(){deleteTracker(confirmDelId);setConfirmDelId(null);setSelId(null);}} style={{...S.btnDark,background:"#C43A3A"}}>Delete</button>
+            </div>
+          </div>
+        </Overlay>;
+      })()}
     </div>
   );
 }
