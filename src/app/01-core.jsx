@@ -599,6 +599,7 @@ function NoteImageView(props) {
 
   useEffect(function() {
     if (!path) return;
+    if (path.indexOf("data:") === 0) { setSrc(path); return; }
     var cancelled = false;
     var ext = (path.split(".").pop() || "png").toLowerCase();
     var mime = {png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",webp:"image/webp",svg:"image/svg+xml"}[ext] || "image/png";
