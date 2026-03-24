@@ -153,8 +153,9 @@ function QuickCaptureModal({sections,byId,addTask,addNote,onClose}) {
 
           {/* Actions */}
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <button onClick={handleSave} style={{...S.btnDark,background:saved?"#1A7A43":sec.color,flex:1,display:"flex",justifyContent:"center",gap:8,transition:"background 0.3s"}}>
+            <button onClick={handleSave} style={{...S.btnDark,background:saved?"#1A7A43":sec.color,flex:1,display:"flex",justifyContent:"center",alignItems:"center",gap:8,transition:"background 0.3s"}}>
               {saved?"\u2713 Saved!":(type==="task"?"Add Task":"Create Note")}
+              {!saved&&<span style={{fontSize:9,opacity:0.6,fontWeight:400}}>Ctrl+Enter</span>}
             </button>
             <button onClick={onClose} style={S.btnGhost}>Cancel</button>
           </div>
