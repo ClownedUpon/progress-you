@@ -878,23 +878,24 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
         reader.onload = function(e) {
           var base64 = e.target.result;
           var fs = window.__TAURI__ && window.__TAURI__.fs;
-          var path = window.__TAURI__ && window.__TAURI__.path;
-          if (!fs || !path || !fs.writeFile) return;
+          if (!fs || !fs.writeFile || !fs.mkdir) return;
+          var BD = fs.BaseDirectory;
           var ext = blob.type.split("/")[1] || "png";
           if (ext === "jpeg") ext = "jpg";
           var fileName = "paste-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + ext;
-          path.appDataDir().then(function(appDir) {
-            var imgDir = appDir + "images";
-            return fs.mkdir(imgDir, {recursive: true}).then(function() { return imgDir; });
-          }).then(function(imgDir) {
-            var filePath = imgDir + "/" + fileName;
-            var arr = new Uint8Array(base64.split(",")[1].length);
-            var raw = atob(base64.split(",")[1]);
-            for (var j = 0; j < raw.length; j++) arr[j] = raw.charCodeAt(j);
-            return fs.writeFile(filePath, arr).then(function() { return filePath; });
-          }).then(function(filePath) {
+          var relPath = "images/" + fileName;
+          var raw = atob(base64.split(",")[1]);
+          var arr = new Uint8Array(raw.length);
+          for (var j = 0; j < raw.length; j++) arr[j] = raw.charCodeAt(j);
+          fs.mkdir("images", {baseDir: BD.AppData, recursive: true}).then(function() {
+            return fs.writeFile(relPath, arr, {baseDir: BD.AppData});
+          }).then(function() {
+            return window.__TAURI__.path.appDataDir();
+          }).then(function(appDir) {
+            var sep = appDir.indexOf("\\") >= 0 ? "\\" : "/";
+            var fullPath = appDir + "images" + sep + fileName;
             if (editor) {
-              editor.chain().focus().insertContent({type: "noteImage", attrs: {path: filePath}}).run();
+              editor.chain().focus().insertContent({type: "noteImage", attrs: {path: fullPath}}).run();
               setTimeout(function() { restoreNoteImages(editor.view.dom); }, 50);
             }
           }).catch(function(err) { console.error("Paste image error:", err); });
