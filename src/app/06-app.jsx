@@ -88,6 +88,7 @@ function App() {
   function navigateToDate(dateStr){ setNavStack([]); setView("timetable"); setWeek(mondayOf(new Date(dateStr+"T12:00:00"))); }
   const [lastBoardSec, setLastBoardSec] = useState(null);
   const [showPin,      setShowPin]      = useState(false);
+  const [pinnedNoteId, setPinnedNoteId] = useState(null);
   const [lastNoteKey,  setLastNoteKey]  = useState({sec:null,id:null});
   const [templates,    setTemplates]    = useState([]);
   const [setBlocks,    setSetBlocks]    = useState([]);
@@ -256,6 +257,7 @@ function App() {
     setSetBlocks(p=>[...p.filter(x=>!(x.type===sb.type&&x.sectionId===sb.sectionId&&x.label===sb.label&&x.start===sb.start&&x.end===sb.end)),sb]);
   }
   function removeSetBlock(id){ setSetBlocks(p=>p.filter(x=>x.id!==id)); }
+  function reorderSetBlock(id,dir){ setSetBlocks(function(p){ var i=p.findIndex(function(x){return x.id===id;}); if(i<0)return p; var j=i+dir; if(j<0||j>=p.length)return p; var a=p.slice(); var tmp=a[i]; a[i]=a[j]; a[j]=tmp; return a; }); }
 
   function applyTemplate(tmpl,mode){
     if(mode==="confirm"){
@@ -672,7 +674,7 @@ function App() {
 
       <main style={{padding:"24px 28px",maxWidth:1500,margin:"0 auto"}}>
         {view==="today"     && <TodayView     {...tp} getDayBlocks={getDayBlocks} onOpenCapture={()=>setShowCap(true)} trackers={trackers} toggleTrackerDay={toggleTrackerDay}/>}
-        {view==="timetable" && <TimetableView sections={sections} byId={byId} getDayBlocks={getDayBlocks} upsertBlock={upsertBlock} deleteBlock={deleteBlock} templates={templates} addTemplate={addTemplate} updateTemplate={updateTemplate} deleteTemplate={deleteTemplate} applyTemplate={applyTemplate} tasks={tasks} notes={notes} setBlocks={setBlocks} addSetBlock={addSetBlock} removeSetBlock={removeSetBlock} trackers={trackers}/>}
+        {view==="timetable" && <TimetableView sections={sections} byId={byId} getDayBlocks={getDayBlocks} upsertBlock={upsertBlock} deleteBlock={deleteBlock} templates={templates} addTemplate={addTemplate} updateTemplate={updateTemplate} deleteTemplate={deleteTemplate} applyTemplate={applyTemplate} tasks={tasks} notes={notes} setBlocks={setBlocks} addSetBlock={addSetBlock} removeSetBlock={removeSetBlock} reorderSetBlock={reorderSetBlock} trackers={trackers}/>}
         {view==="boards"    && <BoardsView    {...tp} notes={notes} setView={setView} initialSecId={lastBoardSec} onSecChange={setLastBoardSec} archiveTask={archiveTask} archiveDoneTasks={archiveDoneTasks}/>}
         {view==="notes"     && <NotesView     sections={sections} byId={byId} getSectionNotes={getSectionNotes} addNote={addNote} updateNoteField={updateNoteField} deleteNote={deleteNote} tasks={tasks} setView={setView} initialSecId={lastNoteKey.sec} initialNoteId={lastNoteKey.id} onNoteChange={(sec,id)=>setLastNoteKey({sec,id})}/>}
         {view==="trackers"  && <TrackersView  trackers={trackers} addTracker={addTracker} updateTracker={updateTracker} deleteTracker={deleteTracker} toggleTrackerDay={toggleTrackerDay} archiveTracker={archiveTracker} sections={sections} byId={byId} tasks={tasks} notes={notes} addTask={addTask} addNote={addNote} linkTrackerToTask={linkTrackerToTask} unlinkTrackerFromTask={unlinkTrackerFromTask} linkTrackerToNote={linkTrackerToNote} unlinkTrackerFromNote={unlinkTrackerFromNote}/>}
@@ -720,7 +722,7 @@ function App() {
       {ctxMenu&&<ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={ctxMenu.items} onClose={()=>setCtxMenu(null)}/>}
       {navStack.length>0&&<NavOverlay stack={navStack} tasks={tasks} notes={notes} trackers={trackers} byId={byId} updateTask={updateTask} completeTask={completeTask} toggleTrackerDay={toggleTrackerDay} onClose={()=>setNavStack([])} onNavigateToLevel={i=>setNavStack(s=>s.slice(0,i+1))}/>}
     </div>
-      {showPin&&<PinOverlay tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} trackers={trackers} toggleTrackerDay={toggleTrackerDay} onClose={()=>setShowPin(false)} navigateTo={navigateTo} navigateToFresh={navigateToFresh} navigateToDate={navigateToDate}/>}
+      {showPin&&<PinOverlay tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} trackers={trackers} toggleTrackerDay={toggleTrackerDay} onClose={()=>setShowPin(false)} navigateTo={navigateTo} navigateToFresh={navigateToFresh} navigateToDate={navigateToDate} notes={notes} pinnedNoteId={pinnedNoteId} setPinnedNoteId={setPinnedNoteId}/>}
     </CtxMenuCtx.Provider>
     </NavCtx.Provider>
   );

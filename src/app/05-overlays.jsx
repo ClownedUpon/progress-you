@@ -189,7 +189,7 @@ function TaskPanel({taskId,tasks,allNotes,byId,updateTask,completeTask}) {
               <div key={item.id}
                 onClick={()=>updateTask(task.id,{checklist:checklist.map(i=>i.id===item.id?{...i,done:!i.done}:i)})}
                 style={{display:"flex",alignItems:"center",gap:10,padding:"7px 12px",borderRadius:8,background:"#F3EDE3",cursor:"pointer",border:"1px solid #E3D9CC"}}>
-                <div style={{width:14,height:14,borderRadius:3,border:`1.5px solid ${item.done?"#1A7A43":"#C2B49E"}`,background:item.done?"#1A7A43":"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"#fff"}}>{item.done?"&#x2713;":""}</div>
+                <div style={{width:14,height:14,borderRadius:3,border:`1.5px solid ${item.done?"#1A7A43":"#C2B49E"}`,background:item.done?"#1A7A43":"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"#fff"}}>{item.done?"\u2713":""}</div>
                 <span style={{fontSize:13,flex:1,color:item.done?"#9B8E80":"#1C1714",textDecoration:item.done?"line-through":"none"}}>{item.text}</span>
               </div>
             ))}
@@ -286,9 +286,11 @@ function NotePanel({noteId,allNotes,tasks,byId}) {
   );
 }
 
-function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClose,navigateTo,navigateToDate,navigateToFresh}) {
+function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClose,navigateTo,navigateToDate,navigateToFresh,notes,pinnedNoteId,setPinnedNoteId}) {
   const [pos,  setPos]  = useState({x:null,y:null}); // null = anchored bottom-right
   const [dragging,setDragging]=useState(false);
+  const [noteSearch, setNoteSearch] = useState("");
+  const [showNotePicker, setShowNotePicker] = useState(false);
   const dragRef=React.useRef(null);
   const panelRef=React.useRef(null);
 
@@ -443,7 +445,49 @@ function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClo
           </div>
         )}
 
-        {blocks.length===0&&activeTasks.length===0&&pinTrackers.length===0&&(
+        {/* Pinned Note */}
+        <div style={{padding:"8px 12px 10px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+            <div style={{fontSize:9,fontWeight:700,color:"#4A3F30",letterSpacing:"0.6px",textTransform:"uppercase"}}>Pinned Note</div>
+            {pinnedNoteId&&<button onClick={function(){setPinnedNoteId(null);}} style={{background:"none",border:"none",cursor:"pointer",color:"#7A6C5E",fontSize:11,padding:0}} title="Unpin note">{"\u2715"}</button>}
+          </div>
+          {(function(){
+            if(!pinnedNoteId){
+              if(showNotePicker){
+                var allNotes=Object.values(notes||{}).flat();
+                var q=noteSearch.toLowerCase();
+                var filtered=q?allNotes.filter(function(n){return n.title&&n.title.toLowerCase().indexOf(q)>=0;}):allNotes.slice(0,15);
+                return React.createElement("div",{style:{background:"#2C2420",borderRadius:6,padding:6}},
+                  React.createElement("input",{value:noteSearch,onChange:function(e){setNoteSearch(e.target.value);},placeholder:"Search notes\u2026",autoFocus:true,
+                    style:{width:"100%",padding:"5px 8px",borderRadius:5,border:"1px solid #3A302A",background:"#1C1714",color:"#F8F3EC",fontSize:11,marginBottom:4,outline:"none"}}),
+                  filtered.length===0?React.createElement("div",{style:{fontSize:10,color:"#4A3F30",padding:"4px 2px"}},"No notes found."):null,
+                  filtered.map(function(n){return React.createElement("div",{key:n.id,onClick:function(){setPinnedNoteId(n.id);setShowNotePicker(false);setNoteSearch("");},
+                    onMouseEnter:function(e){e.currentTarget.style.background="#3A302A";},
+                    onMouseLeave:function(e){e.currentTarget.style.background="transparent";},
+                    style:{fontSize:11,padding:"4px 6px",borderRadius:4,cursor:"pointer",color:"#EBE4D8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},
+                    n.title||"Untitled");})
+                );
+              }
+              return React.createElement("button",{onClick:function(){setShowNotePicker(true);},
+                style:{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px dashed #3A302A",background:"transparent",color:"#4A3F30",fontSize:11,cursor:"pointer",textAlign:"center"}},
+                "+ Pin a note");
+            }
+            var allN=Object.values(notes||{}).flat();
+            var pn=allN.find(function(n){return n.id===pinnedNoteId;});
+            if(!pn) return React.createElement("div",{style:{fontSize:10,color:"#4A3F30",fontStyle:"italic"}},"Note not found.");
+            var preview=pn.content||"";
+            var tmp=document.createElement("div"); tmp.innerHTML=preview;
+            var text=tmp.textContent||tmp.innerText||"";
+            if(text.length>300) text=text.slice(0,300)+"\u2026";
+            return React.createElement("div",{style:{background:"#2C2420",borderRadius:6,padding:"8px 10px",cursor:"pointer"},
+              onClick:function(){if(navigateToFresh||navigateTo){(navigateToFresh||navigateTo)({type:"note",id:pn.id});}}},
+              React.createElement("div",{style:{fontSize:11,fontWeight:600,color:"#C8A86B",marginBottom:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},pn.title||"Untitled"),
+              React.createElement("div",{style:{fontSize:10,color:"#9B8E80",lineHeight:1.5,maxHeight:120,overflowY:"auto",whiteSpace:"pre-wrap",wordBreak:"break-word"}},text)
+            );
+          })()}
+        </div>
+
+        {blocks.length===0&&activeTasks.length===0&&pinTrackers.length===0&&!pinnedNoteId&&(
           <div style={{padding:"20px 12px",textAlign:"center",color:"#4A3F30",fontSize:11}}>
             No blocks, tasks, or trackers today.
           </div>
