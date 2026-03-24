@@ -309,7 +309,7 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
       {/* Set block palette */}
       {(setBlocks||[]).length>0&&(
         <div style={{marginBottom:14,padding:"8px 12px",background:"#EBE4D8",borderRadius:10,border:"1px solid #D6CEC3"}}>
-          <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:7}}>Set Blocks — drag to place</div>
+          <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:7}}>Set Blocks <span style={{fontWeight:400,textTransform:"none",color:"#9B8E80"}}>{"\u2014"} drag to place, right-click to reorder</span></div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {(setBlocks||[]).map(function(sb,idx){
               var sec=sb.sectionId?byId[sb.sectionId]:null;
@@ -866,9 +866,52 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
     ]);
   }, []);
 
+  function handlePasteImage(view, event) {
+    var items = event.clipboardData && event.clipboardData.items;
+    if (!items) return false;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") === 0) {
+        event.preventDefault();
+        var blob = items[i].getAsFile();
+        if (!blob) return true;
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var base64 = e.target.result;
+          var fs = window.__TAURI__ && window.__TAURI__.fs;
+          var path = window.__TAURI__ && window.__TAURI__.path;
+          if (!fs || !path || !fs.writeFile) return;
+          var ext = blob.type.split("/")[1] || "png";
+          if (ext === "jpeg") ext = "jpg";
+          var fileName = "paste-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + ext;
+          path.appDataDir().then(function(appDir) {
+            var imgDir = appDir + "images";
+            return fs.mkdir(imgDir, {recursive: true}).then(function() { return imgDir; });
+          }).then(function(imgDir) {
+            var filePath = imgDir + "/" + fileName;
+            var arr = new Uint8Array(base64.split(",")[1].length);
+            var raw = atob(base64.split(",")[1]);
+            for (var j = 0; j < raw.length; j++) arr[j] = raw.charCodeAt(j);
+            return fs.writeFile(filePath, arr).then(function() { return filePath; });
+          }).then(function(filePath) {
+            if (editor) {
+              editor.chain().focus().insertContent({type: "noteImage", attrs: {path: filePath}}).run();
+              setTimeout(function() { restoreNoteImages(editor.view.dom); }, 50);
+            }
+          }).catch(function(err) { console.error("Paste image error:", err); });
+        };
+        reader.readAsDataURL(blob);
+        return true;
+      }
+    }
+    return false;
+  }
+
   var editor = useEditor({
     extensions: editorExtensions,
     content: note.content || "<p></p>",
+    editorProps: {
+      handlePaste: handlePasteImage,
+    },
     onUpdate: function(ctx) {
       setSaved(false);
       clearTimeout(saveTimer.current);
