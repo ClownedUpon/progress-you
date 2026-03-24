@@ -257,7 +257,7 @@ function App() {
     setSetBlocks(p=>[...p.filter(x=>!(x.type===sb.type&&x.sectionId===sb.sectionId&&x.label===sb.label&&x.start===sb.start&&x.end===sb.end)),sb]);
   }
   function removeSetBlock(id){ setSetBlocks(p=>p.filter(x=>x.id!==id)); }
-  function reorderSetBlock(id,dir){ setSetBlocks(function(p){ var i=p.findIndex(function(x){return x.id===id;}); if(i<0)return p; var j=i+dir; if(j<0||j>=p.length)return p; var a=p.slice(); var tmp=a[i]; a[i]=a[j]; a[j]=tmp; return a; }); }
+  function reorderSetBlock(dragId,dropId){ setSetBlocks(function(p){ var fi=p.findIndex(function(x){return x.id===dragId;}); var ti=p.findIndex(function(x){return x.id===dropId;}); if(fi<0||ti<0||fi===ti)return p; var a=p.slice(); var item=a.splice(fi,1)[0]; a.splice(ti,0,item); return a; }); }
 
   function applyTemplate(tmpl,mode){
     if(mode==="confirm"){
@@ -723,6 +723,7 @@ function App() {
       {navStack.length>0&&<NavOverlay stack={navStack} tasks={tasks} notes={notes} trackers={trackers} byId={byId} updateTask={updateTask} completeTask={completeTask} toggleTrackerDay={toggleTrackerDay} onClose={()=>setNavStack([])} onNavigateToLevel={i=>setNavStack(s=>s.slice(0,i+1))}/>}
     </div>
       {showPin&&<PinOverlay tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} trackers={trackers} toggleTrackerDay={toggleTrackerDay} onClose={()=>setShowPin(false)} navigateTo={navigateTo} navigateToFresh={navigateToFresh} navigateToDate={navigateToDate} notes={notes} pinnedNoteId={pinnedNoteId} setPinnedNoteId={setPinnedNoteId}/>}
+      {pinnedNoteId&&<NoteFloatOverlay noteId={pinnedNoteId} notes={notes} onClose={()=>setPinnedNoteId(null)} navigateTo={navigateTo} navigateToFresh={navigateToFresh}/>}
     </CtxMenuCtx.Provider>
     </NavCtx.Provider>
   );

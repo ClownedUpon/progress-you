@@ -210,6 +210,8 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
   const [showTmplDrop, setShowTmplDrop] = useState(false);
   const [palDrag,      setPalDrag]      = useState(null);
   const palDragRef = React.useRef(null);
+  const [sbDragId,     setSbDragId]    = useState(null);
+  const [sbDragOver,   setSbDragOver]  = useState(null);
 
   // ── Palette drag (set block → day column)
   function startPalDrag(e, snippet){
@@ -311,19 +313,23 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
         <div style={{marginBottom:14,padding:"8px 12px",background:"#EBE4D8",borderRadius:10,border:"1px solid #D6CEC3"}}>
           <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:7}}>Set Blocks — drag to place</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {(setBlocks||[]).map(function(sb,idx){
+            {(setBlocks||[]).map(function(sb){
               var sec=sb.sectionId?byId[sb.sectionId]:null;
               var bg=sec?sec.color:"#8B7D6B";
-              var arrStyle={background:"none",border:"none",cursor:"pointer",color:"#9B8E80",fontSize:10,padding:"0 1px",lineHeight:1};
+              var isDragTarget=sbDragOver===sb.id&&sbDragId!==sb.id;
               return (
-                <div key={sb.id} style={{display:"inline-flex",alignItems:"center",gap:3}}>
-                  <div style={{display:"flex",flexDirection:"column",gap:0}}>
-                    <button onClick={function(){reorderSetBlock(sb.id,-1);}} disabled={idx===0} style={{...arrStyle,opacity:idx===0?0.3:1}} title="Move left">&#x25C0;</button>
-                    <button onClick={function(){reorderSetBlock(sb.id,1);}} disabled={idx===(setBlocks||[]).length-1} style={{...arrStyle,opacity:idx===(setBlocks||[]).length-1?0.3:1}} title="Move right">&#x25B6;</button>
-                  </div>
-                  <div onPointerDown={function(e){startPalDrag(e,sb);}}
+                <div key={sb.id} style={{display:"inline-flex",alignItems:"center",gap:3}}
+                  draggable={true}
+                  onDragStart={function(e){setSbDragId(sb.id);e.dataTransfer.effectAllowed="move";}}
+                  onDragOver={function(e){e.preventDefault();setSbDragOver(sb.id);}}
+                  onDragLeave={function(){setSbDragOver(null);}}
+                  onDrop={function(e){e.preventDefault();if(sbDragId&&sbDragId!==sb.id){reorderSetBlock(sbDragId,sb.id);}setSbDragId(null);setSbDragOver(null);}}
+                  onDragEnd={function(){setSbDragId(null);setSbDragOver(null);}}>
+                  <div onPointerDown={function(e){if(!sbDragId)startPalDrag(e,sb);}}
                     style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:20,
-                      background:bg+"22",border:"1px solid "+bg+"50",cursor:"grab",userSelect:"none",fontSize:11,fontWeight:600,color:bg}}>
+                      background:isDragTarget?bg+"44":bg+"22",border:"1px solid "+(isDragTarget?bg:bg+"50"),
+                      cursor:"grab",userSelect:"none",fontSize:11,fontWeight:600,color:bg,
+                      opacity:sbDragId===sb.id?0.4:1,transition:"all 0.15s"}}>
                     {sb.label||(sec?.label)||(sb.type==="break"?"Break":"Block")}
                     <span style={{fontSize:9,color:bg+"99"}}>{"\u2022"} {sb.start}{"\u2013"}{sb.end}</span>
                   </div>
@@ -1452,7 +1458,7 @@ function MonthlyView({tasks,sections,byId,initialMode="calendar"}) {
 
 function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTrackerDay,archiveTracker,sections,byId,tasks,notes,addTask,addNote,linkTrackerToTask,unlinkTrackerFromTask,linkTrackerToNote,unlinkTrackerFromNote}) {
   const {navigateToFresh}=React.useContext(NavCtx)||{};
-  const {openCtx}=React.useContext(CtxMenuCtx)||{};
+  const openCtx=React.useContext(CtxMenuCtx);
   const [selId,setSelId]=useState(null);
   const [showCreate,setShowCreate]=useState(false);
   const [editId,setEditId]=useState(null);
@@ -1599,6 +1605,8 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
               )}
               <div style={{flex:1}}/>
               <button onClick={()=>setEditId(sel.id)} style={{...S.btnGhost,fontSize:11,padding:"4px 12px"}}>Edit</button>
+              <button onClick={function(){archiveTracker(sel.id);setSelId(null);}} style={{...S.btnGhost,fontSize:11,padding:"4px 12px",color:"#9B8E80"}}>Archive</button>
+              <button onClick={function(){if(confirm("Delete tracker \""+sel.title+"\"? This cannot be undone.")){deleteTracker(sel.id);setSelId(null);}}} style={{...S.btnGhost,fontSize:11,padding:"4px 12px",color:"#C43A3A"}}>Delete</button>
             </div>
 
             {/* Pinned Tasks — active linked tasks (done tasks hidden) */}
