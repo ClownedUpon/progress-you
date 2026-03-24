@@ -201,7 +201,7 @@ function MiniCol({label,labelColor,tasks,secColor,updateTask,completeTask}) {
 
 function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
                         templates,addTemplate,updateTemplate,deleteTemplate,applyTemplate,
-                        tasks,notes,setBlocks,addSetBlock,removeSetBlock,trackers}) {
+                        tasks,notes,setBlocks,addSetBlock,removeSetBlock,reorderSetBlock,trackers}) {
   const openCtx = React.useContext(CtxMenuCtx);
   const {navigateTo} = React.useContext(NavCtx)||{};
   const allNotes = Object.values(notes||{}).flat();
@@ -294,7 +294,7 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
                     <div style={{width:10,height:10,borderRadius:"50%",background:t.color,flexShrink:0}}/>
                     <span onClick={()=>handleApplyTemplate(t)} style={{fontSize:12,fontWeight:500,flex:1,cursor:"pointer"}}>{t.name}</span>
                     <button onClick={e=>{e.stopPropagation();setShowTmplDrop(false);setTmplModal(t);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9B8E80",fontSize:11,padding:"0 2px"}}>Edit</button>
-                    <button onClick={e=>{e.stopPropagation();deleteTemplate(t.id);}} style={{background:"none",border:"none",cursor:"pointer",color:"#C43A3A",fontSize:11,padding:"0 2px"}}>&#xd7;</button>
+                    <button onClick={function(e){e.stopPropagation();if(confirm("Delete template \""+t.name+"\"? This cannot be undone."))deleteTemplate(t.id);}} style={{background:"none",border:"none",cursor:"pointer",color:"#C43A3A",fontSize:11,padding:"0 2px"}}>&#xd7;</button>
                   </div>
                 ))}
                 <div style={{borderTop:"1px solid #E3D9CC",marginTop:6,paddingTop:6}}>
@@ -311,18 +311,23 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
         <div style={{marginBottom:14,padding:"8px 12px",background:"#EBE4D8",borderRadius:10,border:"1px solid #D6CEC3"}}>
           <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:7}}>Set Blocks — drag to place</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {(setBlocks||[]).map(sb=>{
-              const sec=sb.sectionId?byId[sb.sectionId]:null;
-              const bg=sec?sec.color:"#8B7D6B";
+            {(setBlocks||[]).map(function(sb,idx){
+              var sec=sb.sectionId?byId[sb.sectionId]:null;
+              var bg=sec?sec.color:"#8B7D6B";
+              var arrStyle={background:"none",border:"none",cursor:"pointer",color:"#9B8E80",fontSize:10,padding:"0 1px",lineHeight:1};
               return (
-                <div key={sb.id} style={{display:"inline-flex",alignItems:"center",gap:4}}>
-                  <div onPointerDown={e=>startPalDrag(e,sb)}
-                    style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:20,
-                      background:bg+"22",border:`1px solid ${bg}50`,cursor:"grab",userSelect:"none",fontSize:11,fontWeight:600,color:bg}}>
-                    {sb.label||(sec?.label)||(sb.type==="break"?"Break":"Block")}
-                    <span style={{fontSize:9,color:bg+"99"}}>&#x2022; {sb.start}&#x2013;{sb.end}</span>
+                <div key={sb.id} style={{display:"inline-flex",alignItems:"center",gap:3}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:0}}>
+                    <button onClick={function(){reorderSetBlock(sb.id,-1);}} disabled={idx===0} style={{...arrStyle,opacity:idx===0?0.3:1}} title="Move left">&#x25C0;</button>
+                    <button onClick={function(){reorderSetBlock(sb.id,1);}} disabled={idx===(setBlocks||[]).length-1} style={{...arrStyle,opacity:idx===(setBlocks||[]).length-1?0.3:1}} title="Move right">&#x25B6;</button>
                   </div>
-                  <button onClick={()=>removeSetBlock(sb.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#C2B49E",fontSize:11,padding:"0 2px",lineHeight:1}} title="Remove from palette">&#xd7;</button>
+                  <div onPointerDown={function(e){startPalDrag(e,sb);}}
+                    style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:20,
+                      background:bg+"22",border:"1px solid "+bg+"50",cursor:"grab",userSelect:"none",fontSize:11,fontWeight:600,color:bg}}>
+                    {sb.label||(sec?.label)||(sb.type==="break"?"Break":"Block")}
+                    <span style={{fontSize:9,color:bg+"99"}}>{"\u2022"} {sb.start}{"\u2013"}{sb.end}</span>
+                  </div>
+                  <button onClick={function(){removeSetBlock(sb.id);}} style={{background:"none",border:"none",cursor:"pointer",color:"#C43A3A",fontSize:12,padding:"0 2px",lineHeight:1,fontWeight:700}} title="Remove from palette">&#xd7;</button>
                 </div>
               );
             })}
@@ -370,6 +375,14 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
                       style={{background:"#F3EDE3",borderRadius:9,padding:"7px 10px",border:"1.5px dashed #C2B49E",cursor:"pointer",transition:"filter 0.15s",userSelect:"none",minHeight:bh,boxSizing:"border-box"}}>
                       <div style={{fontSize:10,color:"#9B8E80",fontWeight:700}}>{blk.start} &#x2013; {blk.end}</div>
                       <div style={{fontSize:11,color:"#C2B49E",fontStyle:"italic"}}>{blk.label||"Break / Buffer"}</div>
+                      {linked.map(function(item,i){return (
+                        <div key={i} onClick={function(e){e.stopPropagation();if(item.live&&navigateTo)navigateTo({type:item.type,id:item.id});}}
+                          style={{fontSize:10,marginTop:3,opacity:item.live?0.8:0.5,display:"flex",alignItems:"center",gap:3,
+                            cursor:item.live?"pointer":"default",textDecoration:item.live?"underline":"none",color:"#7A6C5E"}}>
+                          {item.type==="task"?"\uD83D\uDCCC ":"\uD83D\uDCDD "}{item.label}
+                          {!item.live&&<span style={{fontStyle:"italic"}}> (removed)</span>}
+                        </div>
+                      );})}
                     </div>
                   );})();
                   return (()=>{
@@ -385,7 +398,7 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
                         <div key={i} onClick={e=>{e.stopPropagation();if(item.live)navigateTo?.({type:item.type,id:item.id});}}
                           style={{fontSize:10,marginTop:3,opacity:item.live?0.9:0.55,display:"flex",alignItems:"center",gap:3,
                             cursor:item.live?"pointer":"default",textDecoration:item.live?"underline":"none"}}>
-                          {item.type==="task"?"&#x1F4CC; ":"&#x1F4DD; "}{item.label}
+                          {item.type==="task"?"\uD83D\uDCCC ":"\uD83D\uDCDD "}{item.label}
                           {!item.live&&<span style={{fontStyle:"italic"}}> (removed)</span>}
                         </div>
                       ))}
@@ -591,7 +604,7 @@ function TaskCard({task,secColor,isOver,isDragging,onDragStart,updateTask,delete
          className="hov-card"
          onContextMenu={e=>{ if(!openCtx) return; openCtx(e,[
            {label:"Edit",       action:()=>setEditModal(true)},
-           {label:"&#x1F4C5; Schedule", action:()=>setSchedModal(true)},
+           {label:"\uD83D\uDCC5 Schedule", action:()=>setSchedModal(true)},
            {label:"Duplicate",  action:()=>addTask(task.sectionId,task.title,task.notes,{dueDate:task.dueDate,status:task.status})},
            {label:"Move to…",   submenu:(sections||[]).filter(s=>s.id!==task.sectionId).map(s=>({label:s.label,action:()=>updateTask(task.id,{sectionId:s.id})}))},
            {label:"Priority",   submenu:[
@@ -603,7 +616,7 @@ function TaskCard({task,secColor,isOver,isDragging,onDragStart,updateTask,delete
            task.status==="done"
              ?{label:"Mark as active",action:()=>updateTask(task.id,{status:"backlog",completedAt:null,monthCompleted:null})}
              :{label:"Mark as done",  action:()=>completeTask(task.id)},
-           task.status==="done"?{label:"&#x1F4E6; Archive",action:()=>archiveTask?.(task.id)}:null,
+           task.status==="done"?{label:"\uD83D\uDCE6 Archive",action:()=>archiveTask?.(task.id)}:null,
            {divider:true},
            {label:"Delete",danger:true,action:()=>deleteTask(task.id)},
          ].filter(Boolean)); }}

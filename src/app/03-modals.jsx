@@ -125,7 +125,7 @@ function QuickCaptureModal({sections,byId,addTask,addNote,onClose}) {
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"8px 12px",background:"#F3EDE3",borderRadius:9,border:"1px solid #E3D9CC"}}>
               <button onClick={()=>setHasDue(v=>!v)} style={{width:18,height:18,borderRadius:4,border:`2px solid ${hasDue?"#4B3FC7":"#C2B49E"}`,
                 background:hasDue?"#4B3FC7":"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#fff"}}>
-                {hasDue?"&#x2713;":""}
+                {hasDue?"\u2713":""}
               </button>
               <span style={{fontSize:12,fontWeight:600,color:"#4A3F30",cursor:"pointer"}} onClick={()=>setHasDue(v=>!v)}>Due date</span>
               {hasDue&&<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}
@@ -154,7 +154,7 @@ function QuickCaptureModal({sections,byId,addTask,addNote,onClose}) {
           {/* Actions */}
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <button onClick={handleSave} style={{...S.btnDark,background:saved?"#1A7A43":sec.color,flex:1,display:"flex",justifyContent:"center",gap:8,transition:"background 0.3s"}}>
-              {saved?"&#x2713; Saved!":(type==="task"?"Add Task":"Create Note")}
+              {saved?"\u2713 Saved!":(type==="task"?"Add Task":"Create Note")}
             </button>
             <button onClick={onClose} style={S.btnGhost}>Cancel</button>
           </div>
@@ -466,7 +466,7 @@ function ScheduleTaskModal({task,sections,byId,getDayBlocks,upsertBlock,onClose}
       <div style={{display:"flex",gap:8}}>
         <button onClick={handleSave} disabled={saved}
           style={{...S.btnDark,background:saved?"#1A7A43":sec.color,flex:1}}>
-          {saved?"&#x2713; Scheduled!":"Add to Timetable"}
+          {saved?"\u2713 Scheduled!":"Add to Timetable"}
         </button>
         <button onClick={onClose} style={S.btnGhost}>Cancel</button>
       </div>
@@ -1015,7 +1015,7 @@ function TaskEditModal({task,secColor,sections,allNotes,updateTask,completeTask,
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:hasDue?8:0}}>
           <button onClick={()=>setHasDue(v=>!v)}
             style={{width:16,height:16,borderRadius:3,border:`2px solid ${hasDue?"#4B3FC7":"#C2B49E"}`,background:hasDue?"#4B3FC7":"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"#fff"}}>
-            {hasDue?"&#x2713;":""}
+            {hasDue?"\u2713":""}
           </button>
           <span onClick={()=>setHasDue(v=>!v)} style={{fontSize:12,fontWeight:600,color:"#4A3F30",cursor:"pointer"}}>Due date</span>
           {hasDue&&<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} style={{...S.input,marginBottom:0,flex:1,padding:"3px 8px",fontSize:11}}/>}
@@ -1024,7 +1024,7 @@ function TaskEditModal({task,secColor,sections,allNotes,updateTask,completeTask,
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <button onClick={()=>setAllDay(v=>!v)}
               style={{width:16,height:16,borderRadius:3,border:`2px solid ${allDay?"#4B3FC7":"#C2B49E"}`,background:allDay?"#4B3FC7":"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"#fff"}}>
-              {allDay?"&#x2713;":""}
+              {allDay?"\u2713":""}
             </button>
             <span onClick={()=>setAllDay(v=>!v)} style={{fontSize:11,fontWeight:600,color:"#4A3F30",cursor:"pointer"}}>All day</span>
             {!allDay&&<input type="time" value={dueTime} onChange={e=>setDueTime(e.target.value)} style={{...S.input,marginBottom:0,flex:1,padding:"3px 8px",fontSize:11}}/>}
@@ -1039,7 +1039,7 @@ function TaskEditModal({task,secColor,sections,allNotes,updateTask,completeTask,
           <div key={item.id} style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}>
             <button onClick={()=>setChecklist(p=>p.map((x,j)=>j===i?{...x,done:!x.done}:x))}
               style={{width:14,height:14,borderRadius:3,border:`1.5px solid ${item.done?"#1A7A43":"#C2B49E"}`,background:item.done?"#1A7A43":"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",cursor:"pointer"}}>
-              {item.done?"&#x2713;":""}
+              {item.done?"\u2713":""}
             </button>
             <span style={{fontSize:12,flex:1,textDecoration:item.done?"line-through":"none",color:item.done?"#9B8E80":"#1C1714"}}>{item.text}</span>
             <button onClick={()=>setChecklist(p=>p.filter((_,j)=>j!==i))} style={{background:"none",border:"none",cursor:"pointer",color:"#C2B49E",fontSize:10,padding:0}}>&#xd7;</button>
