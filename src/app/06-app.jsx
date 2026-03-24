@@ -666,7 +666,7 @@ function App() {
           </div>
         )}
 
-        <div style={{display:"flex",gap:5,marginLeft:view==="timetable"?0:"auto",alignItems:"center",flexShrink:0}}>
+        <div style={{display:"flex",gap:5,marginLeft:"auto",alignItems:"center",flexShrink:0}}>
           <button onClick={()=>setShowSearch(true)} title="Search (Ctrl+K)" style={{padding:"6px 10px",borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>&#x1F50D;<span className="hdr-btn-label"> Search</span></button>
           <button onClick={()=>setShowPin(v=>!v)} title={showPin?"Hide today dashboard":"Show today dashboard"} style={{padding:"6px 10px",borderRadius:8,border:"1px solid #3A302A",background:showPin?"#3A302A":"transparent",color:showPin?"#C8A86B":"#7A6C5E",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>&#x1F4CC;<span className="hdr-btn-label"> Today</span></button>
           <div style={{position:"relative"}}>
