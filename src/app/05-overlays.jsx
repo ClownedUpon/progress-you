@@ -107,7 +107,7 @@ function NoteDeleteOverlay({hasChildren,onConfirm,onClose}) {
 }
 
 function TaskPanel({taskId,tasks,allNotes,byId,updateTask,completeTask}) {
-  const {navigateTo,navigateToFresh,setView,getDayBlocks,upsertBlock,sections:navSections}=React.useContext(NavCtx)||{};
+  const {navigateTo,navigateToFresh,setView,getDayBlocks,upsertBlock,setTt,sections:navSections}=React.useContext(NavCtx)||{};
   const task=tasks.find(t=>t.id===taskId);
   const [editing,  setEditing]  = useState(false);
   const [editTitle,setEditTitle]= useState("");
@@ -219,7 +219,7 @@ function TaskPanel({taskId,tasks,allNotes,byId,updateTask,completeTask}) {
         {!editing&&<button onClick={()=>setView?.("boards")} style={{...S.btnMicro,background:"#F3EDE3",color:"#4A3F30",marginLeft:"auto"}}>Go to board &#x2192;</button>}
         {!editing&&<button onClick={()=>setScheduleModal(true)} style={{...S.btnMicro,background:"#E3F0FB",color:"#2A6FAD"}}>&#x1F4C5; Schedule</button>}
       </div>
-      {scheduleModal&&<ScheduleTaskModal task={task} sections={navSections||[]} byId={byId} getDayBlocks={getDayBlocks||(()=>[])} upsertBlock={upsertBlock||(()=>{})} onClose={()=>setScheduleModal(false)}/>}
+      {scheduleModal&&<ScheduleTaskModal task={task} sections={navSections||[]} byId={byId} getDayBlocks={getDayBlocks||(()=>[])} upsertBlock={upsertBlock||(()=>{})} setTt={setTt||(()=>{})} onClose={()=>setScheduleModal(false)}/>}
     </div>
   );
 }

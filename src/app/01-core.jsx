@@ -517,6 +517,7 @@ function migrateTrackers(trackers) {
     ...t,
     order:         t.order         ?? i,
     color:         t.color         ?? "#0C7B7B",
+    mode:          t.mode          ?? "habit",
     activeDays:    t.activeDays    ?? [1,1,1,1,1,0,0],
     completions:   t.completions   ?? {},
     linkedTaskIds: t.linkedTaskIds ?? [],

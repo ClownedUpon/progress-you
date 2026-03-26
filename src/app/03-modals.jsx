@@ -11,6 +11,9 @@ function QuickCaptureModal({sections,byId,addTask,addNote,onClose}) {
   const [priority,  setPriority]  = useState("normal");
   const [checklist, setChecklist] = useState([]);
   const [newItem,   setNewItem]   = useState("");
+  const [hasRemind, setHasRemind] = useState(false);
+  const [remindDate,setRemindDate]= useState(todayISO());
+  const [remindTime,setRemindTime]= useState("09:00");
   const [saved,     setSaved]     = useState(false);
   const titleRef = useRef();
 
@@ -35,7 +38,8 @@ function QuickCaptureModal({sections,byId,addTask,addNote,onClose}) {
   function handleSave() {
     if(!title.trim()) { titleRef.current?.focus(); return; }
     if(type==="task") {
-      addTask(secId,title.trim(),body.trim(),{dueDate:hasDue?dueDate:null,status,priority,checklist});
+      var remind = hasRemind ? new Date(remindDate+"T"+remindTime).toISOString() : null;
+      addTask(secId,title.trim(),body.trim(),{dueDate:hasDue?dueDate:null,status,priority,checklist,remindAt:remind});
     } else {
       addNote(secId, null, {
         title: title.trim(),
@@ -130,6 +134,21 @@ function QuickCaptureModal({sections,byId,addTask,addNote,onClose}) {
               <span style={{fontSize:12,fontWeight:600,color:"#4A3F30",cursor:"pointer"}} onClick={()=>setHasDue(v=>!v)}>Due date</span>
               {hasDue&&<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}
                 style={{...S.input,marginBottom:0,flex:1,padding:"4px 8px",fontSize:12}}/>}
+            </div>
+
+            {/* Reminder */}
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"8px 12px",background:"#F3EDE3",borderRadius:9,border:"1px solid #E3D9CC"}}>
+              <button onClick={()=>setHasRemind(v=>!v)} style={{width:18,height:18,borderRadius:4,border:"2px solid "+(hasRemind?"#4B3FC7":"#C2B49E"),
+                background:hasRemind?"#4B3FC7":"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#fff"}}>
+                {hasRemind?"\u2713":""}
+              </button>
+              <span style={{fontSize:12,fontWeight:600,color:"#4A3F30",cursor:"pointer"}} onClick={()=>setHasRemind(v=>!v)}>Reminder</span>
+              {hasRemind&&<>
+                <input type="date" value={remindDate} onChange={e=>setRemindDate(e.target.value)}
+                  style={{...S.input,marginBottom:0,padding:"4px 8px",fontSize:12,flex:1}}/>
+                <input type="time" value={remindTime} onChange={e=>setRemindTime(e.target.value)}
+                  style={{...S.input,marginBottom:0,padding:"4px 8px",fontSize:12,width:100}}/>
+              </>}
             </div>
 
             {/* Checklist */}
@@ -402,26 +421,38 @@ function SearchModal({tasks,notes,sections,byId,tt,trackers,onClose,setView}) {
 
 // ─── Schedule Task Modal ──────────────────────────────────────────────────────
 
-function ScheduleTaskModal({task,sections,byId,getDayBlocks,upsertBlock,onClose}) {
-  const [day,   setDay]   = useState(todayName());
-  const [start, setStart] = useState("09:00");
-  const [end,   setEnd]   = useState("10:00");
-  const [saved, setSaved] = useState(false);
+function ScheduleTaskModal({task,sections,byId,getDayBlocks,upsertBlock,setTt,onClose}) {
+  const [mode,    setMode]    = useState("week");
+  const [day,     setDay]     = useState(todayName());
+  const [pickDate,setPickDate]= useState(todayISO());
+  const [start,   setStart]   = useState("09:00");
+  const [end,     setEnd]     = useState("10:00");
+  const [saved,   setSaved]   = useState(false);
+
+  // Derived day name from date picker
+  const dateDayName = (function(){
+    var d = new Date(pickDate+"T12:00:00");
+    return DAYS[(d.getDay()+6)%7];
+  })();
+
+  const effectiveDay = mode==="date" ? dateDayName : day;
 
   // Smart default: end of last block for chosen day
   useEffect(()=>{
-    const blocks=getDayBlocks(day);
-    if(blocks.length>0){
-      const sorted=[...blocks].sort((a,b)=>a.start.localeCompare(b.start));
-      const lastEnd=sorted[sorted.length-1].end;
-      setStart(lastEnd);
-      const [h,m]=lastEnd.split(":").map(Number);
-      const endM=h*60+m+60;
-      setEnd(`${String(Math.floor(endM/60)%24).padStart(2,"0")}:${String(endM%60).padStart(2,"0")}`);
-    } else {
-      setStart("09:00"); setEnd("10:00");
+    if(mode==="week"){
+      const blocks=getDayBlocks(effectiveDay);
+      if(blocks.length>0){
+        const sorted=[...blocks].sort((a,b)=>a.start.localeCompare(b.start));
+        const lastEnd=sorted[sorted.length-1].end;
+        setStart(lastEnd);
+        const [h,m]=lastEnd.split(":").map(Number);
+        const endM=h*60+m+60;
+        setEnd(String(Math.floor(endM/60)%24).padStart(2,"0")+":"+String(endM%60).padStart(2,"0"));
+      } else {
+        setStart("09:00"); setEnd("10:00");
+      }
     }
-  },[day]);
+  },[day,mode]);
 
   function handleSave(){
     const blk={
@@ -430,7 +461,18 @@ function ScheduleTaskModal({task,sections,byId,getDayBlocks,upsertBlock,onClose}
       linkedItems:[{type:"task",id:task.id,snapshot:task.title},
         ...(task.linkedNoteIds||[]).map(nid=>({type:"note",id:nid,snapshot:""}))],
     };
-    upsertBlock(day,blk);
+    if(mode==="date"){
+      var wk = mondayOf(new Date(pickDate+"T12:00:00"));
+      setTt(function(prev){
+        var w = Object.assign({},prev[wk]||{});
+        var arr = [].concat(w[dateDayName]||[]);
+        arr.push(blk);
+        w[dateDayName] = arr;
+        return Object.assign({},prev,function(){var o={};o[wk]=w;return o;}());
+      });
+    } else {
+      upsertBlock(effectiveDay,blk);
+    }
     setSaved(true);
     setTimeout(onClose,600);
   }
@@ -438,26 +480,41 @@ function ScheduleTaskModal({task,sections,byId,getDayBlocks,upsertBlock,onClose}
   const sec=byId[task.sectionId]||{color:"#9B8E80",label:"?"};
 
   return (
-    <Overlay onClose={onClose} width={420}>
+    <Overlay onClose={onClose} width={440}>
       <div style={{fontFamily:'"Playfair Display",serif',fontSize:18,fontWeight:700,marginBottom:4}}>Schedule Task</div>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:20,padding:"8px 12px",background:sec.color+"18",borderRadius:9,border:`1px solid ${sec.color}40`}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:20,padding:"8px 12px",background:sec.color+"18",borderRadius:9,border:"1px solid "+sec.color+"40"}}>
         <Dot color={sec.color} size={8}/>
         <span style={{fontSize:13,fontWeight:600,color:"#1C1714",flex:1}}>{task.title}</span>
         <span style={{fontSize:11,color:sec.color,fontWeight:700}}>{sec.label}</span>
       </div>
 
-      <span style={S.lbl}>Day</span>
-      <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:16}}>
-        {DAYS.map(d=>(
-          <button key={d} onClick={()=>setDay(d)}
-            style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:"1.5px solid",
-              borderColor:day===d?sec.color:"#D6CEC3",
-              background:day===d?sec.color:"transparent",
-              color:day===d?textFor(sec.color):"#6B5E4E"}}>
-            {d.slice(0,3)}
-          </button>
-        ))}
+      {/* Mode toggle */}
+      <div style={{display:"flex",gap:4,marginBottom:14,background:"#EBE4D8",borderRadius:8,padding:3}}>
+        <button onClick={()=>setMode("week")} style={{flex:1,padding:"5px 0",borderRadius:6,border:"none",fontSize:11,fontWeight:600,background:mode==="week"?"#FDFAF6":"transparent",color:mode==="week"?"#1C1714":"#7A6C5E",boxShadow:mode==="week"?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>This Week</button>
+        <button onClick={()=>setMode("date")} style={{flex:1,padding:"5px 0",borderRadius:6,border:"none",fontSize:11,fontWeight:600,background:mode==="date"?"#FDFAF6":"transparent",color:mode==="date"?"#1C1714":"#7A6C5E",boxShadow:mode==="date"?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>Pick a Date</button>
       </div>
+
+      {mode==="week" ? <>
+        <span style={S.lbl}>Day</span>
+        <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:16}}>
+          {DAYS.map(d=>(
+            <button key={d} onClick={()=>setDay(d)}
+              style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:"1.5px solid",
+                borderColor:day===d?sec.color:"#D6CEC3",
+                background:day===d?sec.color:"transparent",
+                color:day===d?textFor(sec.color):"#6B5E4E"}}>
+              {d.slice(0,3)}
+            </button>
+          ))}
+        </div>
+      </> : <>
+        <span style={S.lbl}>Date</span>
+        <input type="date" value={pickDate} onChange={e=>setPickDate(e.target.value)}
+          style={{...S.input,marginBottom:6,fontSize:13}}/>
+        <div style={{fontSize:11,color:"#7A6C5E",marginBottom:16}}>
+          {dateDayName} &middot; Week of {mondayOf(new Date(pickDate+"T12:00:00"))}
+        </div>
+      </>}
 
       <div style={{display:"flex",gap:14,marginBottom:20}}>
         <TimePicker value={start} onChange={v=>{setStart(v);}} label="Start"/>

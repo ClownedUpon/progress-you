@@ -294,7 +294,7 @@ function App() {
         type:extra.type||"task",status:extra.status||"backlog",
         order:maxOrder+1,priority:extra.priority||"normal",
         checklist:[],linkedNoteIds:[],linkedTrackerIds:[],
-        dueDate:extra.dueDate||null,dueTime:null,allDay:true,remindAt:null,remindFired:false,
+        dueDate:extra.dueDate||null,dueTime:null,allDay:true,remindAt:extra.remindAt||null,remindFired:false,
         createdAt:Date.now(),completedAt:null,monthCompleted:null
       },...prev];
     });
@@ -343,7 +343,7 @@ function App() {
   function addTracker(title,opts={}){
     setTrackers(prev=>[{
       id:uid(),title,sectionId:opts.sectionId||null,color:opts.color||"#0C7B7B",
-      activeDays:opts.activeDays||[1,1,1,1,1,0,0],completions:{},
+      mode:opts.mode||"habit",activeDays:opts.activeDays||[1,1,1,1,1,0,0],completions:{},
       linkedTaskIds:[],linkedNoteIds:[],order:prev.length,archived:false,createdAt:Date.now()
     },...prev]);
   }
@@ -353,11 +353,18 @@ function App() {
     setTrackers(p=>p.filter(t=>t.id!==id));
     if(trk) pushUndo("Tracker deleted",trk.title,()=>setTrackers(prev=>[trk,...prev]));
   }
-  function toggleTrackerDay(id,dateISO){
+  function toggleTrackerDay(id,dateISO,increment){
     setTrackers(p=>p.map(t=>{
       if(t.id!==id) return t;
       const c={...t.completions};
-      if(c[dateISO]) delete c[dateISO]; else c[dateISO]=true;
+      if(t.mode==="tally"){
+        var cur=typeof c[dateISO]==="number"?c[dateISO]:c[dateISO]?1:0;
+        if(increment) c[dateISO]=cur+1;
+        else if(cur>1) c[dateISO]=cur-1;
+        else delete c[dateISO];
+      } else {
+        if(c[dateISO]) delete c[dateISO]; else c[dateISO]=true;
+      }
       return{...t,completions:c};
     }));
   }
@@ -519,7 +526,7 @@ function App() {
   const tp={sections,byId,tasks,addTask,updateTask,deleteTask,completeTask,moveTask,archiveTask,archiveDoneTasks};
 
   return (
-    <NavCtx.Provider value={{navigateTo,navigateToFresh,navigateBack,navigateToDate,navStack,navigateToIndex:i=>setNavStack(s=>s.slice(0,i+1)),setView,getDayBlocks,upsertBlock,sections}}>
+    <NavCtx.Provider value={{navigateTo,navigateToFresh,navigateBack,navigateToDate,navStack,navigateToIndex:i=>setNavStack(s=>s.slice(0,i+1)),setView,getDayBlocks,upsertBlock,setTt,sections}}>
     <CtxMenuCtx.Provider value={openCtx}>
     <div style={{background:"#F8F3EC",minHeight:"100vh",fontFamily:'"DM Sans",sans-serif',color:"#1C1714"}}>
       <style>{`
