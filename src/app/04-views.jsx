@@ -6,7 +6,7 @@ function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onO
   const dateStr  = new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   const todaySids= [...new Set(blocks.filter(b=>b.sectionId&&b.sectionId!=="overhead"&&byId[b.sectionId]).map(b=>b.sectionId))];
   const todayDi  = dayIndex(todayISO());
-  const todayTrackers=(trackers||[]).filter(t=>!t.archived&&t.activeDays[todayDi]);
+  const todayTrackers=(trackers||[]).filter(t=>!t.archived&&(t.mode==="tally"||t.activeDays[todayDi]));
   const today=todayISO();
 
   return (
@@ -31,9 +31,22 @@ function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onO
           <Cap>Daily Trackers</Cap>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             {todayTrackers.map(trk=>{
-              const done=trk.completions[today];
+              const val=trk.completions[today];
+              const done=trk.mode==="tally"?(typeof val==="number"?val:val?1:0)>0:!!val;
+              const count=trk.mode==="tally"?(typeof val==="number"?val:val?1:0):0;
               const streak=trackerStreak(trk);
-              return (
+              return trk.mode==="tally" ? (
+                <div key={trk.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,
+                  background:done?trk.color+"12":"#F8F3EC",border:"1px solid "+(done?trk.color+"40":"#E3D9CC")}}>
+                  <Dot color={trk.color} size={10}/>
+                  <span style={{fontSize:13,fontWeight:500,flex:1,color:"#1C1714"}}>{trk.title}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    <button onClick={()=>toggleTrackerDay(trk.id,today,false)} style={{width:22,height:22,borderRadius:5,border:"1.5px solid #D6CEC3",background:"#F8F3EC",fontSize:13,fontWeight:700,color:"#7A6C5E",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>&minus;</button>
+                    <span style={{fontSize:14,fontWeight:700,color:trk.color,minWidth:24,textAlign:"center"}}>{count}</span>
+                    <button onClick={()=>toggleTrackerDay(trk.id,today,true)} style={{width:22,height:22,borderRadius:5,border:"1.5px solid "+trk.color,background:trk.color,fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                  </div>
+                </div>
+              ) : (
                 <div key={trk.id} onClick={()=>toggleTrackerDay(trk.id,today)}
                   style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,cursor:"pointer",
                     background:done?"#D4F0E0":"#F8F3EC",border:done?"1.5px solid #1A7A43":"1px solid #E3D9CC"}}>
@@ -126,10 +139,15 @@ function UpcomingDigest({tasks,byId,completeTask,updateTask}) {
     const sec   = byId[task.sectionId]||{color:"#9B8E80",label:"?"};
     const due   = fmtDue(task.dueDate);
     return (
-      <div className="upcoming-task" style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,background:"#F8F3EC",border:"1px solid #E3D9CC",cursor:"default",transition:"background 0.12s"}}>
+      <div className="upcoming-task" style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,
+        background:task.priority==="high"?"#FAF0F0":task.priority==="low"?"#F3F1EE":"#F8F3EC",
+        border:"1px solid "+(task.priority==="high"?"#E8C4C4":task.priority==="low"?"#DDD8D0":"#E3D9CC"),
+        opacity:task.priority==="low"?0.7:1,
+        cursor:"default",transition:"background 0.12s"}}>
+        {task.priority==="high"&&<span style={{fontSize:9,fontWeight:800,color:"#C43A3A",flexShrink:0}} title="High priority">&#x2191;</span>}
         <button onClick={()=>completeTask(task.id)} title="Mark done"
-          style={{width:16,height:16,borderRadius:4,border:`2px solid ${sec.color}`,background:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:sec.color}}>✓</button>
-        <span onClick={()=>navigateTo?.({type:"task",id:task.id})} style={{fontSize:12,flex:1,fontWeight:500,color:"#1C1714",cursor:"pointer"}}>{task.title}</span>
+          style={{width:16,height:16,borderRadius:4,border:`2px solid ${sec.color}`,background:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:sec.color}}>&#x2713;</button>
+        <span onClick={()=>navigateTo?.({type:"task",id:task.id})} style={{fontSize:12,flex:1,fontWeight:task.priority==="high"?700:500,color:task.priority==="low"?"#7A6C5E":"#1C1714",cursor:"pointer"}}>{task.title}</span>
         <span style={{fontSize:10,padding:"2px 7px",borderRadius:10,fontWeight:700,background:sec.color+"20",color:sec.color,flexShrink:0}}>{sec.label}</span>
         <span style={{fontSize:10,fontWeight:700,flexShrink:0,color:due.urgent?"#C43A3A":"#7A6C5E",background:due.urgent?"#FAE8E8":"#EBE4D8",padding:"2px 7px",borderRadius:10}}>{due.label}</span>
       </div>
@@ -581,7 +599,7 @@ function SpacerCard({task,isOver,isDragging,onPointerDown,deleteTask}) {
 
 function TaskCard({task,secColor,isOver,isDragging,onDragStart,updateTask,deleteTask,completeTask,addTask,sections,allNotes,setView,archiveTask}) {
   const openCtx = React.useContext(CtxMenuCtx);
-  const {navigateTo:navTo,getDayBlocks,upsertBlock,sections:navSections}=React.useContext(NavCtx)||{};
+  const {navigateTo:navTo,getDayBlocks,upsertBlock,setTt,sections:navSections}=React.useContext(NavCtx)||{};
   const [open,      setOpen]      = useState(false);
   const [editModal, setEditModal] = useState(false);
   const [schedModal,setSchedModal]= useState(false);
@@ -689,7 +707,7 @@ function TaskCard({task,secColor,isOver,isDragging,onDragStart,updateTask,delete
 
       {editModal&&<TaskEditModal task={task} secColor={secColor} sections={sections} allNotes={allNotes}
         updateTask={updateTask} completeTask={completeTask} deleteTask={deleteTask} onClose={()=>setEditModal(false)}/>}
-      {schedModal&&<ScheduleTaskModal task={task} sections={navSections||sections||[]} byId={Object.fromEntries((navSections||sections||[]).map(s=>[s.id,s]))} getDayBlocks={getDayBlocks||(()=>[])} upsertBlock={upsertBlock||(()=>{})} onClose={()=>setSchedModal(false)}/>}
+      {schedModal&&<ScheduleTaskModal task={task} sections={navSections||sections||[]} byId={Object.fromEntries((navSections||sections||[]).map(s=>[s.id,s]))} getDayBlocks={getDayBlocks||(()=>[])} upsertBlock={upsertBlock||(()=>{})} setTt={setTt||(()=>{})} onClose={()=>setSchedModal(false)}/>}
     </div>
   );
 }
@@ -1527,8 +1545,13 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
     for(let d=1;d<=daysInMonth;d++){
       const iso=[year,String(month+1).padStart(2,"0"),String(d).padStart(2,"0")].join("-");
       const di=(new Date(year,month,d).getDay()+6)%7;
-      cells.push({day:d,iso,active:trk.activeDays[di],done:trk.completions[iso]});
+      var rawV=trk.completions[iso];
+      var cellActive=trk.mode==="tally"||trk.activeDays[di];
+      var cellDone=trk.mode==="tally"?(typeof rawV==="number"?rawV:rawV?1:0)>0:!!rawV;
+      var cellCount=trk.mode==="tally"?(typeof rawV==="number"?rawV:rawV?1:0):0;
+      cells.push({day:d,iso,active:cellActive,done:cellDone,count:cellCount});
     }
+    var isTally=trk.mode==="tally";
     return (
       <div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
@@ -1542,13 +1565,17 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
             if(!c) return <div key={"e"+i}/>;
             const isToday=c.iso===today;
             return (
-              <div key={c.iso} onClick={()=>{if(c.active) toggleTrackerDay(trk.id,c.iso);}}
-                style={{width:"100%",aspectRatio:"1",borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",
-                  fontSize:10,fontWeight:isToday?700:500,cursor:c.active?"pointer":"default",
-                  background:c.done?trk.color+"30":c.active?"#F8F3EC":"#EBE4D8",
+              <div key={c.iso}
+                onClick={()=>{if(c.active) toggleTrackerDay(trk.id,c.iso,isTally?true:undefined);}}
+                onContextMenu={isTally?function(e){e.preventDefault();if(c.count>0) toggleTrackerDay(trk.id,c.iso,false);}:undefined}
+                title={isTally&&c.count>0?c.count+" occurrence"+(c.count!==1?"s":""):""}
+                style={{width:"100%",aspectRatio:"1",borderRadius:4,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                  fontSize:isTally&&c.count>0?8:10,fontWeight:isToday?700:500,cursor:c.active?"pointer":"default",
+                  background:c.done?(isTally?trk.color+"20":trk.color+"30"):c.active?"#F8F3EC":"#EBE4D8",
                   color:c.done?trk.color:c.active?"#4A3F30":"#C8BEB0",
                   border:isToday?"2px solid "+trk.color:"1px solid transparent"}}>
-                {c.day}
+                <span>{c.day}</span>
+                {isTally&&c.count>0&&<span style={{fontSize:8,fontWeight:700,lineHeight:1}}>{c.count}</span>}
               </div>
             );
           })}
@@ -1560,8 +1587,10 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
   function TrackerRow({trk}){
     const streak=trackerStreak(trk);
     const todayDi=dayIndex(today);
-    const isActiveToday=trk.activeDays[todayDi];
-    const doneToday=trk.completions[today];
+    const isActiveToday=trk.mode==="tally"||trk.activeDays[todayDi];
+    const rawVal=trk.completions[today];
+    const doneToday=trk.mode==="tally"?(typeof rawVal==="number"?rawVal:rawVal?1:0):!!rawVal;
+    const tallyCount=trk.mode==="tally"?(typeof rawVal==="number"?rawVal:rawVal?1:0):0;
     return (
       <div onClick={()=>setSelId(trk.id)}
         onContextMenu={e=>openCtx?.(e,[
@@ -1574,17 +1603,23 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
         <div style={{width:10,height:10,borderRadius:3,background:trk.color,flexShrink:0}}/>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:13,fontWeight:600,color:"#1C1714",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{trk.title}</div>
-          <div style={{fontSize:10,color:"#9B8E80"}}>{DAYS.filter((_,i)=>trk.activeDays[i]).map(d=>d.slice(0,3)).join(", ")}</div>
+          <div style={{fontSize:10,color:"#9B8E80"}}>{trk.mode==="tally"?"Tally tracker":DAYS.filter((_,i)=>trk.activeDays[i]).map(d=>d.slice(0,3)).join(", ")}</div>
         </div>
-        {isActiveToday&&(
+        {trk.mode==="tally" ? (
+          <div style={{display:"flex",alignItems:"center",gap:3}} onClick={e=>e.stopPropagation()}>
+            <button onClick={()=>toggleTrackerDay(trk.id,today,false)} style={{width:18,height:18,borderRadius:4,border:"1px solid #D6CEC3",background:"#F8F3EC",fontSize:11,fontWeight:700,color:"#7A6C5E",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>&minus;</button>
+            <span style={{fontSize:12,fontWeight:700,color:trk.color,minWidth:18,textAlign:"center"}}>{tallyCount}</span>
+            <button onClick={()=>toggleTrackerDay(trk.id,today,true)} style={{width:18,height:18,borderRadius:4,border:"1px solid "+trk.color,background:trk.color,fontSize:11,fontWeight:700,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+          </div>
+        ) : isActiveToday ? (
           <div onClick={e=>{e.stopPropagation();toggleTrackerDay(trk.id,today);}}
             style={{width:20,height:20,borderRadius:5,border:"2px solid "+trk.color,
               background:doneToday?trk.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",
               color:"#fff",fontSize:11,fontWeight:700,flexShrink:0,cursor:"pointer"}}>
             {doneToday?"\u2713":""}
           </div>
-        )}
-        {streak>0&&<span style={{fontSize:10,fontWeight:600,color:trk.color,flexShrink:0}}>{streak}d</span>}
+        ) : null}
+        {trk.mode!=="tally"&&streak>0&&<span style={{fontSize:10,fontWeight:600,color:trk.color,flexShrink:0}}>{streak}d</span>}
       </div>
     );
   }
@@ -1852,6 +1887,7 @@ function TrackerCreateModal({sections,tracker,onSave,onClose}) {
   const [title,setTitle]=useState(tracker?.title||"");
   const [secId,setSecId]=useState(tracker?.sectionId||"");
   const [color,setColor]=useState(tracker?.color||"#0C7B7B");
+  const [mode,setMode]=useState(tracker?.mode||"habit");
   const [days,setDays]=useState(tracker?.activeDays||[1,1,1,1,1,0,0]);
   const titleRef=useRef(null);
   useEffect(()=>{setTimeout(()=>titleRef.current?.focus(),60);},[]);
@@ -1860,7 +1896,7 @@ function TrackerCreateModal({sections,tracker,onSave,onClose}) {
 
   function handleSave(){
     if(!title.trim()) return;
-    onSave({title:title.trim(),sectionId:secId||null,color,activeDays:days});
+    onSave({title:title.trim(),sectionId:secId||null,color,mode,activeDays:days});
   }
 
   return (
@@ -1872,8 +1908,26 @@ function TrackerCreateModal({sections,tracker,onSave,onClose}) {
       <div style={{marginBottom:12}}>
         <label style={S.lbl}>Title</label>
         <input ref={titleRef} value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==="Enter") handleSave();}}
-          placeholder="e.g. Exercise, Reading, Meditation..."
+          placeholder={mode==="tally"?"e.g. Late to work, Snacking, Headaches...":"e.g. Exercise, Reading, Meditation..."}
           style={{...S.input,marginBottom:0}}/>
+      </div>
+      <div style={{marginBottom:12}}>
+        <label style={S.lbl}>Type</label>
+        <div style={{display:"flex",gap:4,background:"#EBE4D8",borderRadius:8,padding:3}}>
+          <button onClick={()=>setMode("habit")} style={{flex:1,padding:"6px 0",borderRadius:6,border:"none",fontSize:11,fontWeight:600,
+            background:mode==="habit"?"#FDFAF6":"transparent",color:mode==="habit"?"#1C1714":"#7A6C5E",
+            boxShadow:mode==="habit"?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>
+            Habit
+          </button>
+          <button onClick={()=>setMode("tally")} style={{flex:1,padding:"6px 0",borderRadius:6,border:"none",fontSize:11,fontWeight:600,
+            background:mode==="tally"?"#FDFAF6":"transparent",color:mode==="tally"?"#1C1714":"#7A6C5E",
+            boxShadow:mode==="tally"?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>
+            Tally
+          </button>
+        </div>
+        <div style={{fontSize:10,color:"#9B8E80",marginTop:4}}>
+          {mode==="habit"?"Track daily habits — one check per day.":"Track occurrences — tick multiple times per day to count events."}
+        </div>
       </div>
       <div style={{marginBottom:12}}>
         <label style={S.lbl}>Section (optional)</label>
@@ -1882,7 +1936,7 @@ function TrackerCreateModal({sections,tracker,onSave,onClose}) {
           {sections.filter(s=>s.id!=="overhead").map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
       </div>
-      <div style={{marginBottom:12}}>
+      {mode==="habit"&&<div style={{marginBottom:12}}>
         <label style={S.lbl}>Active Days</label>
         <div style={{display:"flex",gap:4}}>
           {DAYS.map((d,i)=>(
@@ -1893,7 +1947,7 @@ function TrackerCreateModal({sections,tracker,onSave,onClose}) {
             </button>
           ))}
         </div>
-      </div>
+      </div>}
       <div style={{marginBottom:16}}>
         <ColorPicker value={color} onChange={setColor} label="Colour"/>
       </div>
