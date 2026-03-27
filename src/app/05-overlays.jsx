@@ -113,10 +113,34 @@ function TaskPanel({taskId,tasks,allNotes,byId,updateTask,completeTask}) {
   const [editTitle,setEditTitle]= useState("");
   const [editNotes,setEditNotes]= useState("");
   const [editStatus,setEditStatus]=useState("");
+  const [editPriority,setEditPriority]=useState("normal");
+  const [editSecId,setEditSecId]=useState("");
+  const [editHasDue,setEditHasDue]=useState(false);
+  const [editDueDate,setEditDueDate]=useState(todayISO());
+  const [editHasRemind,setEditHasRemind]=useState(false);
+  const [editRemindDate,setEditRemindDate]=useState(todayISO());
+  const [editRemindTime,setEditRemindTime]=useState("09:00");
+  const [editChecklist,setEditChecklist]=useState([]);
+  const [editNewItem,setEditNewItem]=useState("");
   const [scheduleModal,setScheduleModal]=useState(false);
 
   useEffect(()=>{
-    if(task){ setEditTitle(task.title||""); setEditNotes(task.notes||""); setEditStatus(task.status||"backlog"); }
+    if(task){
+      setEditTitle(task.title||"");
+      setEditNotes(task.notes||"");
+      setEditStatus(task.status||"backlog");
+      setEditPriority(task.priority||"normal");
+      setEditSecId(task.sectionId||"");
+      setEditHasDue(!!task.dueDate);
+      setEditDueDate(task.dueDate||todayISO());
+      setEditChecklist((task.checklist||[]).map(function(i){return{...i};}));
+      var ra=task.remindAt?new Date(task.remindAt):null;
+      setEditHasRemind(!!ra);
+      if(ra){
+        setEditRemindDate(ra.toISOString().slice(0,10));
+        setEditRemindTime(ra.toTimeString().slice(0,5));
+      }
+    }
     setEditing(false);
   },[taskId]);
 
@@ -127,9 +151,26 @@ function TaskPanel({taskId,tasks,allNotes,byId,updateTask,completeTask}) {
   const checklist=task.checklist||[];
   const doneItems=checklist.filter(i=>i.done).length;
   const linkedNotes=(task.linkedNoteIds||[]).map(id=>allNotes.find(n=>n.id===id)).filter(Boolean);
+  const PRIORITIES=[{key:"high",label:"High",color:"#C43A3A"},{key:"normal",label:"Normal",color:"#9B8E80"},{key:"low",label:"Low",color:"#7A6C5E"}];
+  const STATUSES=[{key:"backlog",label:"Backlog"},{key:"this-week",label:"This Week"},{key:"done",label:"Done"}];
+
+  function addEditCheckItem(){ if(!editNewItem.trim()) return; setEditChecklist(function(p){return[...p,{id:uid(),text:editNewItem.trim(),done:false}];}); setEditNewItem(""); }
+  function removeEditCheckItem(cid){ setEditChecklist(function(p){return p.filter(function(i){return i.id!==cid;});}); }
+  function toggleEditCheckItem(cid){ setEditChecklist(function(p){return p.map(function(i){return i.id===cid?{...i,done:!i.done}:i;});}); }
 
   function saveEdit(){
-    updateTask(task.id,{title:editTitle.trim()||task.title,notes:editNotes.trim()||null,status:editStatus});
+    var remind = editHasRemind ? new Date(editRemindDate+"T"+editRemindTime).toISOString() : null;
+    updateTask(task.id,{
+      title:editTitle.trim()||task.title,
+      notes:editNotes.trim()||null,
+      status:editStatus,
+      priority:editPriority,
+      sectionId:editSecId||task.sectionId,
+      dueDate:editHasDue?editDueDate:null,
+      remindAt:remind,
+      remindFired:remind?false:task.remindFired,
+      checklist:editChecklist
+    });
     setEditing(false);
   }
 
@@ -159,16 +200,84 @@ function TaskPanel({taskId,tasks,allNotes,byId,updateTask,completeTask}) {
       {/* Notes / edit area */}
       {editing?(
         <div style={{marginBottom:14}}>
-          <textarea value={editNotes} onChange={e=>setEditNotes(e.target.value)} rows={3} placeholder="Notes…"
-            style={{...S.input,resize:"vertical",fontSize:13}}/>
-          <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
-            {[{key:"backlog",label:"Backlog"},{key:"this-week",label:"This Week"},{key:"done",label:"Done"}].map(s=>(
-              <button key={s.key} onClick={()=>setEditStatus(s.key)}
-                style={{...S.btnMicro,border:`1.5px solid ${editStatus===s.key?"#4B3FC7":"#D6CEC3"}`,
-                  background:editStatus===s.key?"#E6E3F5":"transparent",
-                  color:editStatus===s.key?"#4B3FC7":"#6B5E4E"}}>{s.label}</button>
-            ))}
+          {/* Section */}
+          <div style={{marginBottom:10}}>
+            <span style={S.lbl}>Section</span>
+            <select value={editSecId} onChange={e=>setEditSecId(e.target.value)} style={{...S.input,marginBottom:0}}>
+              {(navSections||[]).map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
           </div>
+          {/* Notes */}
+          <textarea value={editNotes} onChange={e=>setEditNotes(e.target.value)} rows={3} placeholder="Notes..."
+            style={{...S.input,resize:"vertical",fontSize:13}}/>
+          {/* Status + Priority */}
+          <div style={{display:"flex",gap:10,marginBottom:10}}>
+            <div style={{flex:1}}>
+              <span style={S.lbl}>Status</span>
+              <div style={{display:"flex",gap:4}}>
+                {STATUSES.map(s=>(
+                  <button key={s.key} onClick={()=>setEditStatus(s.key)}
+                    style={{flex:1,padding:"5px 0",borderRadius:7,border:"1.5px solid "+(editStatus===s.key?"#4B3FC7":"#D6CEC3"),
+                      background:editStatus===s.key?"#E6E3F5":"transparent",
+                      color:editStatus===s.key?"#4B3FC7":"#7A6C5E",fontSize:10,fontWeight:600}}>{s.label}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{flex:1}}>
+              <span style={S.lbl}>Priority</span>
+              <div style={{display:"flex",gap:4}}>
+                {PRIORITIES.map(p=>(
+                  <button key={p.key} onClick={()=>setEditPriority(p.key)}
+                    style={{flex:1,padding:"5px 0",borderRadius:7,border:"1.5px solid "+(editPriority===p.key?p.color:"#D6CEC3"),
+                      background:editPriority===p.key?p.color+"18":"transparent",
+                      color:editPriority===p.key?p.color:"#7A6C5E",fontSize:10,fontWeight:600}}>{p.label}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {/* Due date */}
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"8px 12px",background:"#F3EDE3",borderRadius:9,border:"1px solid #E3D9CC"}}>
+            <button onClick={()=>setEditHasDue(v=>!v)} style={{width:16,height:16,borderRadius:4,border:"2px solid "+(editHasDue?"#4B3FC7":"#C2B49E"),
+              background:editHasDue?"#4B3FC7":"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"#fff"}}>
+              {editHasDue?"\u2713":""}
+            </button>
+            <span style={{fontSize:11,fontWeight:600,color:"#4A3F30",cursor:"pointer"}} onClick={()=>setEditHasDue(v=>!v)}>Due date</span>
+            {editHasDue&&<input type="date" value={editDueDate} onChange={e=>setEditDueDate(e.target.value)}
+              style={{...S.input,marginBottom:0,flex:1,padding:"4px 8px",fontSize:11}}/>}
+          </div>
+          {/* Reminder */}
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"8px 12px",background:"#F3EDE3",borderRadius:9,border:"1px solid #E3D9CC"}}>
+            <button onClick={()=>setEditHasRemind(v=>!v)} style={{width:16,height:16,borderRadius:4,border:"2px solid "+(editHasRemind?"#4B3FC7":"#C2B49E"),
+              background:editHasRemind?"#4B3FC7":"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"#fff"}}>
+              {editHasRemind?"\u2713":""}
+            </button>
+            <span style={{fontSize:11,fontWeight:600,color:"#4A3F30",cursor:"pointer"}} onClick={()=>setEditHasRemind(v=>!v)}>Reminder</span>
+            {editHasRemind&&<>
+              <input type="date" value={editRemindDate} onChange={e=>setEditRemindDate(e.target.value)}
+                style={{...S.input,marginBottom:0,padding:"4px 8px",fontSize:11,flex:1}}/>
+              <input type="time" value={editRemindTime} onChange={e=>setEditRemindTime(e.target.value)}
+                style={{...S.input,marginBottom:0,padding:"4px 8px",fontSize:11,width:90}}/>
+            </>}
+          </div>
+          {/* Checklist */}
+          <div style={{marginBottom:10,padding:"8px 12px",background:"#F3EDE3",borderRadius:9,border:"1px solid #E3D9CC"}}>
+            <span style={S.lbl}>Checklist</span>
+            {editChecklist.map(function(item){return(
+              <div key={item.id} style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}>
+                <button onClick={function(){toggleEditCheckItem(item.id);}}
+                  style={{width:13,height:13,borderRadius:3,border:"1.5px solid "+(item.done?"#1A7A43":"#C2B49E"),background:item.done?"#1A7A43":"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff"}}>{item.done?"\u2713":""}</button>
+                <span style={{fontSize:12,flex:1,textDecoration:item.done?"line-through":"none",color:item.done?"#9B8E80":"#1C1714"}}>{item.text}</span>
+                <button onClick={function(){removeEditCheckItem(item.id);}} style={{background:"none",border:"none",cursor:"pointer",color:"#C2B49E",fontSize:11,padding:0}}>&#xd7;</button>
+              </div>
+            );})}
+            <div style={{display:"flex",gap:6,marginTop:4}}>
+              <input value={editNewItem} onChange={e=>setEditNewItem(e.target.value)} placeholder="Add item..."
+                onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addEditCheckItem();}}}
+                style={{...S.input,marginBottom:0,flex:1,padding:"4px 8px",fontSize:11}}/>
+              <button onClick={addEditCheckItem} style={{...S.btnMicro,padding:"4px 10px",fontSize:11}}>+</button>
+            </div>
+          </div>
+          {/* Save/Cancel */}
           <div style={{display:"flex",gap:6,marginTop:10}}>
             <button onClick={saveEdit} style={{...S.btnDark,background:sec.color}}>Save</button>
             <button onClick={()=>setEditing(false)} style={S.btnGhost}>Cancel</button>

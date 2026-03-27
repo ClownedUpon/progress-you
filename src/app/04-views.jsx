@@ -9,26 +9,49 @@ function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onO
   const todayTrackers=(trackers||[]).filter(t=>!t.archived&&(t.mode==="tally"||t.activeDays[todayDi]));
   const today=todayISO();
 
-  return (
-    <div>
-      {/* Title row */}
-      <div style={{display:"flex",alignItems:"flex-end",gap:16,marginBottom:24}}>
-        <div>
-          <h1 style={{fontFamily:'"Playfair Display",serif',fontSize:30,fontWeight:700,lineHeight:1}}>{dayName}</h1>
-          <p style={{fontSize:13,color:"#9B8E80",marginTop:5}}>{dateStr}</p>
-        </div>
-        <button onClick={onOpenCapture} className="cap-btn" style={{marginLeft:"auto",marginBottom:4}}>
-          <span style={{fontSize:14}}>⚡</span><span>Quick Capture</span>
-        </button>
+  const DEFAULT_ORDER=["upcoming","trackers","schedule"];
+  const [sectionOrder,setSectionOrder]=useState(function(){
+    try{ var v=localStorage.getItem("py-today-order"); if(v) return JSON.parse(v); }catch{}
+    return DEFAULT_ORDER;
+  });
+  const [customizing,setCustomizing]=useState(false);
+
+  useEffect(function(){ try{ localStorage.setItem("py-today-order",JSON.stringify(sectionOrder)); }catch{} },[sectionOrder]);
+
+  function moveSection(key,dir){
+    setSectionOrder(function(prev){
+      var idx=prev.indexOf(key); if(idx<0) return prev;
+      var ni=idx+dir; if(ni<0||ni>=prev.length) return prev;
+      var next=[].concat(prev); next[idx]=prev[ni]; next[ni]=prev[idx]; return next;
+    });
+  }
+
+  function SectionHeader({label,sectionKey}){
+    if(!customizing) return null;
+    var idx=sectionOrder.indexOf(sectionKey);
+    return (
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+        <span style={{fontSize:10,fontWeight:700,color:"#9B8E80",letterSpacing:"0.5px",textTransform:"uppercase"}}>{label}</span>
+        <button onClick={function(){moveSection(sectionKey,-1);}} disabled={idx===0}
+          style={{width:20,height:20,borderRadius:4,border:"1px solid #D6CEC3",background:"#F8F3EC",fontSize:11,color:idx===0?"#D6CEC3":"#4A3F30",cursor:idx===0?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>&#x25B2;</button>
+        <button onClick={function(){moveSection(sectionKey,1);}} disabled={idx===sectionOrder.length-1}
+          style={{width:20,height:20,borderRadius:4,border:"1px solid #D6CEC3",background:"#F8F3EC",fontSize:11,color:idx===sectionOrder.length-1?"#D6CEC3":"#4A3F30",cursor:idx===sectionOrder.length-1?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>&#x25BC;</button>
       </div>
+    );
+  }
 
-      {/* Upcoming digest — always shown if there are dated tasks */}
+  var dashSections = {};
+  dashSections["upcoming"] = (
+    <div key="upcoming">
+      <SectionHeader label="Upcoming" sectionKey="upcoming"/>
       <UpcomingDigest tasks={tasks} byId={byId} completeTask={completeTask} updateTask={updateTask}/>
-
-      {/* Daily Trackers */}
-      {todayTrackers.length>0&&(
-        <div style={{marginBottom:20,background:"#EBE4D8",borderRadius:14,padding:"16px 18px"}}>
-          <Cap>Daily Trackers</Cap>
+    </div>
+  );
+  dashSections["trackers"] = todayTrackers.length>0 ? (
+    <div key="trackers">
+      <SectionHeader label="Trackers" sectionKey="trackers"/>
+      <div style={{marginBottom:20,background:"#EBE4D8",borderRadius:14,padding:"16px 18px"}}>
+        <Cap>Daily Trackers</Cap>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             {todayTrackers.map(trk=>{
               const val=trk.completions[today];
@@ -61,11 +84,13 @@ function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onO
             })}
           </div>
         </div>
-      )}
-
-      {/* Schedule + mini boards */}
+      </div>
+  ) : null;
+  dashSections["schedule"] = (
+    <div key="schedule">
+      <SectionHeader label="Schedule" sectionKey="schedule"/>
       {blocks.length===0 ? (
-        <Empty icon="🗓" text="No blocks scheduled today." sub="Head to the Timetable tab to plan your day."/>
+        <Empty icon="&#x1F5D3;" text="No blocks scheduled today." sub="Head to the Timetable tab to plan your day."/>
       ) : (
         <div style={{display:"grid",gridTemplateColumns:"280px 1fr",gap:20,alignItems:"start"}}>
           <div style={{background:"#EBE4D8",borderRadius:14,padding:"16px",position:"sticky",top:88}}>
@@ -74,14 +99,14 @@ function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onO
               {blocks.map(blk=>{
                 if(blk.type==="break") return (
                   <div key={blk.id} style={{background:"#F3EDE3",borderRadius:9,padding:"8px 12px",border:"1.5px dashed #C2B49E"}}>
-                    <div style={{fontSize:10,color:"#9B8E80",fontWeight:700}}>{blk.start} – {blk.end}</div>
+                    <div style={{fontSize:10,color:"#9B8E80",fontWeight:700}}>{blk.start} &#x2013; {blk.end}</div>
                     <div style={{fontSize:12,color:"#C2B49E",fontStyle:"italic"}}>{blk.label||"Break / Buffer"}</div>
                   </div>
                 );
                 const sec=byId[blk.sectionId]; if(!sec) return null;
                 return (
                   <div key={blk.id} style={{background:sec.color,color:textFor(sec.color),borderRadius:9,padding:"9px 12px",borderLeft:"3px solid rgba(255,255,255,0.3)"}}>
-                    <div style={{fontSize:10,opacity:0.72,fontWeight:700,marginBottom:2}}>{blk.start} – {blk.end}</div>
+                    <div style={{fontSize:10,opacity:0.72,fontWeight:700,marginBottom:2}}>{blk.start} &#x2013; {blk.end}</div>
                     <div style={{fontSize:13,fontWeight:600}}>{blk.label||sec.label}</div>
                   </div>
                 );
@@ -89,17 +114,17 @@ function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onO
             </div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            {todaySids.length===0&&<Empty icon="📋" text="No task-linked sections today." sub="Add work blocks to your timetable to see tasks here."/>}
+            {todaySids.length===0&&<Empty icon="&#x1F4CB;" text="No task-linked sections today." sub="Add work blocks to your timetable to see tasks here."/>}
             {todaySids.map(sid=>{
               const sec=byId[sid]; if(!sec) return null;
               const active=tasks.filter(t=>t.sectionId===sid&&t.status!=="done"&&t.type!=="spacer");
               const tw=active.filter(t=>t.status==="this-week");
               const bl=active.filter(t=>t.status==="backlog");
               return (
-                <div key={sid} style={{background:"#EBE4D8",borderRadius:14,padding:"16px 18px",borderTop:`3px solid ${sec.color}`}}>
+                <div key={sid} style={{background:"#EBE4D8",borderRadius:14,padding:"16px 18px",borderTop:"3px solid "+sec.color}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
                     <Dot color={sec.color}/><span style={{fontWeight:700,fontSize:15}}>{sec.label}</span>
-                    <span style={{marginLeft:"auto",fontSize:11,color:"#9B8E80"}}>{tw.length} active · {bl.length} backlog</span>
+                    <span style={{marginLeft:"auto",fontSize:11,color:"#9B8E80"}}>{tw.length} active &#xB7; {bl.length} backlog</span>
                   </div>
                   {active.length===0?<p style={{fontSize:12,color:"#9B8E80",fontStyle:"italic"}}>No open tasks.</p>:(
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
@@ -113,6 +138,32 @@ function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onO
           </div>
         </div>
       )}
+    </div>
+  );
+
+  return (
+    <div>
+      {/* Title row */}
+      <div style={{display:"flex",alignItems:"flex-end",gap:16,marginBottom:24}}>
+        <div>
+          <h1 style={{fontFamily:'"Playfair Display",serif',fontSize:30,fontWeight:700,lineHeight:1}}>{dayName}</h1>
+          <p style={{fontSize:13,color:"#9B8E80",marginTop:5}}>{dateStr}</p>
+        </div>
+        <div style={{display:"flex",gap:6,marginLeft:"auto",marginBottom:4,alignItems:"center"}}>
+          <button onClick={function(){setCustomizing(function(v){return !v;});}}
+            title={customizing?"Done customizing":"Customize dashboard order"}
+            style={{padding:"5px 12px",borderRadius:7,border:"1.5px solid "+(customizing?"#4B3FC7":"#D6CEC3"),
+              background:customizing?"#E6E3F5":"transparent",color:customizing?"#4B3FC7":"#9B8E80",
+              fontSize:11,fontWeight:600,cursor:"pointer"}}>
+            {customizing?"&#x2713; Done":"&#x2630; Arrange"}
+          </button>
+          <button onClick={onOpenCapture} className="cap-btn">
+            <span style={{fontSize:14}}>&#x26A1;</span><span>Quick Capture</span>
+          </button>
+        </div>
+      </div>
+
+      {sectionOrder.map(function(key){ return dashSections[key] || null; })}
     </div>
   );
 }
@@ -140,8 +191,8 @@ function UpcomingDigest({tasks,byId,completeTask,updateTask}) {
     const due   = fmtDue(task.dueDate);
     return (
       <div className="upcoming-task" style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,
-        background:task.priority==="high"?"#FAF0F0":task.priority==="low"?"#F3F1EE":"#F8F3EC",
-        border:"1px solid "+(task.priority==="high"?"#E8C4C4":task.priority==="low"?"#DDD8D0":"#E3D9CC"),
+        background:task.priority==="high"?"#F5DADA":task.priority==="low"?"#F3F1EE":"#F8F3EC",
+        border:"1.5px solid "+(task.priority==="high"?"#D4908F":task.priority==="low"?"#DDD8D0":"#E3D9CC"),
         opacity:task.priority==="low"?0.7:1,
         cursor:"default",transition:"background 0.12s"}}>
         {task.priority==="high"&&<span style={{fontSize:9,fontWeight:800,color:"#C43A3A",flexShrink:0}} title="High priority">&#x2191;</span>}
