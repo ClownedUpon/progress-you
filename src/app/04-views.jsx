@@ -33,9 +33,9 @@ function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onO
       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
         <span style={{fontSize:10,fontWeight:700,color:"#9B8E80",letterSpacing:"0.5px",textTransform:"uppercase"}}>{label}</span>
         <button onClick={function(){moveSection(sectionKey,-1);}} disabled={idx===0}
-          style={{width:20,height:20,borderRadius:4,border:"1px solid #D6CEC3",background:"#F8F3EC",fontSize:11,color:idx===0?"#D6CEC3":"#4A3F30",cursor:idx===0?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>&#x25B2;</button>
+          style={{width:20,height:20,borderRadius:4,border:"1px solid #D6CEC3",background:"#F8F3EC",fontSize:11,color:idx===0?"#D6CEC3":"#4A3F30",cursor:idx===0?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{"\u25B2"}</button>
         <button onClick={function(){moveSection(sectionKey,1);}} disabled={idx===sectionOrder.length-1}
-          style={{width:20,height:20,borderRadius:4,border:"1px solid #D6CEC3",background:"#F8F3EC",fontSize:11,color:idx===sectionOrder.length-1?"#D6CEC3":"#4A3F30",cursor:idx===sectionOrder.length-1?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>&#x25BC;</button>
+          style={{width:20,height:20,borderRadius:4,border:"1px solid #D6CEC3",background:"#F8F3EC",fontSize:11,color:idx===sectionOrder.length-1?"#D6CEC3":"#4A3F30",cursor:idx===sectionOrder.length-1?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{"\u25BC"}</button>
       </div>
     );
   }
@@ -155,7 +155,7 @@ function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onO
             style={{padding:"5px 12px",borderRadius:7,border:"1.5px solid "+(customizing?"#4B3FC7":"#D6CEC3"),
               background:customizing?"#E6E3F5":"transparent",color:customizing?"#4B3FC7":"#9B8E80",
               fontSize:11,fontWeight:600,cursor:"pointer"}}>
-            {customizing?"&#x2713; Done":"&#x2630; Arrange"}
+            {customizing?"\u2713 Done":"\u2630 Arrange"}
           </button>
           <button onClick={onOpenCapture} className="cap-btn">
             <span style={{fontSize:14}}>&#x26A1;</span><span>Quick Capture</span>
