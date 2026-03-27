@@ -1,3 +1,86 @@
+## v2.7.0 — Tally Trackers, Reminders & Dashboard Control
+
+**Tally trackers**
+Trackers now support two modes: **Habit** (binary daily check) and **Tally** (count occurrences per day). Create a tally tracker for things like glasses of water, coffees, or workouts. Tally trackers show +/- buttons everywhere — Today dashboard, Trackers view, and monthly calendar. Left-click increments, right-click decrements. The tracker creation modal lets you choose between Habit and Tally mode.
+
+**Quick Capture reminders**
+The Quick Capture modal (Ctrl+Space) now includes an optional reminder toggle for tasks. Set a date and time, and the app will fire a desktop notification when it's due.
+
+**Priority highlighting**
+High-priority tasks in the Upcoming Digest now stand out with a red-tinted background, bold title, and ↑ arrow. Low-priority tasks are visually de-emphasized.
+
+**Date-based task scheduling**
+The Schedule Task modal now has a "Pick a Date" mode in addition to "This Week." Choose any date and the task is placed as a timetable block in the correct week, even if you're not currently viewing that week.
+
+**Full task editing in side panel**
+The TaskPanel (right-side navigation drawer) now supports full editing: section, priority, status, due date, reminder with date+time, and full checklist CRUD — matching the capabilities of the standalone task edit modal.
+
+**Rearrangeable Today dashboard**
+The Today view now has an "Arrange" button that lets you reorder sections (Upcoming, Trackers, Schedule) with up/down arrows. Your preferred order persists across sessions.
+
+**Pre-release cleanup**
+- Seed data now includes tally tracker examples ("Drink Water" and "Coffees")
+- Export version bumped to v8 for the new tracker `mode` field
+- Fixed HTML entity rendering issues in UI text
+
+---
+
+## v2.6.0 — QoL Polish
+
+**Responsive header**
+The top navigation bar now wraps gracefully at any window width — no more horizontal scrollbar. Button labels collapse at narrow widths, and right-side buttons always stay anchored to the right edge.
+
+**Pinned note overlay**
+Pin any note as a floating, draggable overlay — independent of the Today pin. The note stays visible while you navigate between views. Includes a link button to jump to the full note editor.
+
+**Set block management**
+Set blocks (recurring timetable templates) can now be reordered via right-click context menu and deleted. Drag-to-place is supported with a visual highlight on the target slot.
+
+**Tracker deletion and archiving**
+Trackers can now be deleted (with in-app confirmation dialog) or archived. Archived trackers are hidden from the daily view but preserved in data. An "Archived" toggle in the Trackers view reveals them.
+
+**Template delete confirmation**
+Deleting a week template now shows a confirmation dialog instead of removing it immediately.
+
+**Break/buffer linked items**
+Timetable break and buffer blocks now display their linked items, matching the behavior of regular section blocks.
+
+---
+
+## v2.5.0 — Rich Note Editor
+
+**Tiptap-powered editor**
+The note editor has been completely rebuilt on Tiptap (ProseMirror), replacing the basic contentEditable implementation. The new editor supports:
+
+- **Text formatting**: Bold, Italic, Underline, Strikethrough, Code, Subscript, Superscript
+- **Block types**: Headings (H1–H3), Bullet/Ordered/Task lists, Blockquotes, Code blocks, Horizontal rules
+- **Rich features**: Highlight, Text alignment (left/center/right/justify), Font size, Font color, Tables
+- **Custom nodes**: Callout blocks, Collapsible sections, Date chips, Task chips, Inline images
+
+**Double-row toolbar with tooltips**
+A two-row toolbar provides quick access to all formatting options. Every button has a CSS tooltip showing its name and keyboard shortcut on hover.
+
+**Slash commands**
+Type `/` in the editor to access a command palette for inserting blocks, callouts, collapsibles, tables, horizontal rules, and more.
+
+**Image support**
+Images can be inserted into notes and are stored as inline base64 data URIs — no external file dependencies. Images support resize handles and drag repositioning.
+
+**Collapsible sections**
+Create expandable/collapsible content blocks within notes. Click the arrow to toggle, or the X to remove.
+
+---
+
+## v2.4.0 — New User Experience
+
+**Seed data**
+New installations now launch with pre-populated demo data across all features — sample tasks, notes, timetable blocks, and trackers — so new users can immediately see how the app works instead of facing blank screens.
+
+**Load Demo button**
+A "Load Demo Data" button in Settings → App lets existing users load the demo dataset at any time to explore features or reset to a known state.
+
+---
+
 ## v2.3.0 — Multi-File Architecture
 
 **Modular source split**
