@@ -113,7 +113,7 @@ const TEXT_COLORS = [
 
 // Bump this number whenever the data schema changes (new fields, renamed keys, etc.)
 // so exported files can be versioned and future imports can handle old formats.
-const EXPORT_VERSION = 7;
+const EXPORT_VERSION = 8;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -302,15 +302,18 @@ function buildSeedData() {
 
   // ── Trackers
   var trackers = [
-    { id:trHealth1, title:"Morning Run", sectionId:"health", color:"#1A7A43",
+    { id:trHealth1, title:"Morning Run", sectionId:"health", color:"#1A7A43", mode:"habit",
       activeDays:[1,1,1,1,1,0,0], completions:{}, linkedTaskIds:[tHealth1], linkedNoteIds:[],
       order:0, archived:false, createdAt:now },
-    { id:trLearn1, title:"Read 30 Minutes", sectionId:"learning", color:"#4B3FC7",
+    { id:trLearn1, title:"Read 30 Minutes", sectionId:"learning", color:"#4B3FC7", mode:"habit",
       activeDays:[1,1,1,1,1,1,1], completions:{}, linkedTaskIds:[tLearn1], linkedNoteIds:[nLearn1],
       order:1, archived:false, createdAt:now },
-    { id:trHealth2, title:"Drink Water", sectionId:"health", color:"#0C7B7B",
+    { id:trHealth2, title:"Drink Water", sectionId:"health", color:"#0C7B7B", mode:"tally",
       activeDays:[1,1,1,1,1,1,1], completions:{}, linkedTaskIds:[], linkedNoteIds:[],
       order:2, archived:false, createdAt:now },
+    { id:uid(), title:"Coffees", sectionId:null, color:"#8B5E3C", mode:"tally",
+      activeDays:[1,1,1,1,1,1,1], completions:{}, linkedTaskIds:[], linkedNoteIds:[],
+      order:3, archived:false, createdAt:now },
   ];
 
   // ── Timetable (blocks for today's day in current week)
