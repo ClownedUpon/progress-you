@@ -189,18 +189,34 @@ function UpcomingDigest({tasks,byId,completeTask,updateTask}) {
     const {navigateTo}=React.useContext(NavCtx)||{};
     const sec   = byId[task.sectionId]||{color:"#9B8E80",label:"?"};
     const due   = fmtDue(task.dueDate);
+    const [expanded,setExpanded]=useState(false);
+    const hasDetail=!!(task.notes||(task.checklist&&task.checklist.length>0));
     return (
-      <div className="upcoming-task" style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,
+      <div style={{borderRadius:9,
         background:task.priority==="high"?"#F5DADA":task.priority==="low"?"#F3F1EE":"#F8F3EC",
         border:"1.5px solid "+(task.priority==="high"?"#D4908F":task.priority==="low"?"#DDD8D0":"#E3D9CC"),
-        opacity:task.priority==="low"?0.7:1,
-        cursor:"default",transition:"background 0.12s"}}>
-        {task.priority==="high"&&<span style={{fontSize:9,fontWeight:800,color:"#C43A3A",flexShrink:0}} title="High priority">&#x2191;</span>}
-        <button onClick={()=>completeTask(task.id)} title="Mark done"
-          style={{width:16,height:16,borderRadius:4,border:`2px solid ${sec.color}`,background:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:sec.color}}>&#x2713;</button>
-        <span onClick={()=>navigateTo?.({type:"task",id:task.id})} style={{fontSize:12,flex:1,fontWeight:task.priority==="high"?700:500,color:task.priority==="low"?"#7A6C5E":"#1C1714",cursor:"pointer"}}>{task.title}</span>
-        <span style={{fontSize:10,padding:"2px 7px",borderRadius:10,fontWeight:700,background:sec.color+"20",color:sec.color,flexShrink:0}}>{sec.label}</span>
-        <span style={{fontSize:10,fontWeight:700,flexShrink:0,color:due.urgent?"#C43A3A":"#7A6C5E",background:due.urgent?"#FAE8E8":"#EBE4D8",padding:"2px 7px",borderRadius:10}}>{due.label}</span>
+        opacity:task.priority==="low"?0.7:1,transition:"background 0.12s"}}>
+        <div className="upcoming-task" style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",cursor:"default"}}>
+          {task.priority==="high"&&<span style={{fontSize:9,fontWeight:800,color:"#C43A3A",flexShrink:0}} title="High priority">&#x2191;</span>}
+          <button onClick={()=>completeTask(task.id)} title="Mark done"
+            style={{width:16,height:16,borderRadius:4,border:"2px solid "+sec.color,background:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:sec.color}}>&#x2713;</button>
+          <span onClick={()=>navigateTo?.({type:"task",id:task.id})} style={{fontSize:12,flex:1,fontWeight:task.priority==="high"?700:500,color:task.priority==="low"?"#7A6C5E":"#1C1714",cursor:"pointer"}}>{task.title}</span>
+          {hasDetail&&<button onClick={()=>setExpanded(!expanded)} title={expanded?"Collapse":"Show details"}
+            style={{width:18,height:18,borderRadius:4,border:"1px solid #D6CEC3",background:expanded?"#EBE4D8":"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#9B8E80",cursor:"pointer",fontWeight:700,lineHeight:1}}>{expanded?"\u2212":"+"}</button>}
+          <span style={{fontSize:10,padding:"2px 7px",borderRadius:10,fontWeight:700,background:sec.color+"20",color:sec.color,flexShrink:0}}>{sec.label}</span>
+          <span style={{fontSize:10,fontWeight:700,flexShrink:0,color:due.urgent?"#C43A3A":"#7A6C5E",background:due.urgent?"#FAE8E8":"#EBE4D8",padding:"2px 7px",borderRadius:10}}>{due.label}</span>
+        </div>
+        {expanded&&<div style={{padding:"0 12px 10px 42px",fontSize:12,color:"#4A3F30",lineHeight:1.5}}>
+          {task.notes&&<p style={{margin:"0 0 6px",color:"#6B5E4E",whiteSpace:"pre-wrap"}}>{task.notes}</p>}
+          {(task.checklist||[]).length>0&&<div style={{display:"flex",flexDirection:"column",gap:3}}>
+            {task.checklist.map(function(ci){return (
+              <div key={ci.id} style={{display:"flex",alignItems:"center",gap:5}}>
+                <div style={{width:10,height:10,borderRadius:2,border:"1.5px solid "+(ci.done?"#1A7A43":"#C2B49E"),background:ci.done?"#1A7A43":"transparent",flexShrink:0}}/>
+                <span style={{fontSize:11,color:ci.done?"#9B8E80":"#4A3F30",textDecoration:ci.done?"line-through":"none"}}>{ci.text}</span>
+              </div>
+            );})}
+          </div>}
+        </div>}
       </div>
     );
   }
@@ -242,27 +258,39 @@ function MiniCol({label,labelColor,tasks,secColor,updateTask,completeTask}) {
     <div>
       <div style={{fontSize:10,fontWeight:700,color:labelColor,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>{label}</div>
       {tasks.length===0&&<div style={{fontSize:11,color:"#9B8E80",fontStyle:"italic"}}>Empty</div>}
-      {tasks.map(t=>(
-        <div key={t.id} style={{marginBottom:7}}>
+      {tasks.map(t=>{
+        var hasDetail=!!(t.notes||(t.checklist&&t.checklist.length>0));
+        return (
+        <MiniColTask key={t.id} task={t} secColor={secColor} updateTask={updateTask} completeTask={completeTask} navigateTo={navigateTo} hasDetail={hasDetail}/>
+      );})}
+    </div>
+  );
+}
+function MiniColTask({task,secColor,updateTask,completeTask,navigateTo,hasDetail}){
+  var t=task;
+  var [expanded,setExpanded]=useState(false);
+  return (
+    <div style={{marginBottom:7}}>
           <div style={{display:"flex",alignItems:"flex-start",gap:6}}>
-            <button onClick={()=>completeTask(t.id)} style={{width:15,height:15,borderRadius:4,border:`2px solid ${secColor}`,background:"transparent",padding:0,marginTop:1,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:secColor}}>✓</button>
+            <button onClick={()=>completeTask(t.id)} style={{width:15,height:15,borderRadius:4,border:"2px solid "+secColor,background:"transparent",padding:0,marginTop:1,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:secColor}}>&#x2713;</button>
             <span onClick={()=>navigateTo?.({type:"task",id:t.id})} style={{fontSize:12,lineHeight:1.35,flex:1,cursor:"pointer"}}>{t.title}</span>
-            {t.status==="backlog"&&<button onClick={()=>updateTask(t.id,{status:"this-week"})} style={{fontSize:9,padding:"2px 5px",borderRadius:4,border:"none",background:"#E6E3F5",color:"#4B3FC7",flexShrink:0}}>→W</button>}
+            {hasDetail&&<button onClick={()=>setExpanded(!expanded)} title={expanded?"Collapse":"Show details"}
+              style={{width:16,height:16,borderRadius:3,border:"1px solid #D6CEC3",background:expanded?"#EBE4D8":"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#9B8E80",cursor:"pointer",fontWeight:700,lineHeight:1,marginTop:1}}>{expanded?"\u2212":"+"}</button>}
+            {t.status==="backlog"&&<button onClick={()=>updateTask(t.id,{status:"this-week"})} style={{fontSize:9,padding:"2px 5px",borderRadius:4,border:"none",background:"#E6E3F5",color:"#4B3FC7",flexShrink:0}}>&#x2192;W</button>}
           </div>
-          {(t.checklist||[]).length>0&&(
-            <div style={{marginLeft:21,marginTop:3,display:"flex",flexDirection:"column",gap:2}}>
+          {expanded&&<div style={{marginLeft:21,marginTop:4,fontSize:12,color:"#4A3F30",lineHeight:1.5}}>
+            {t.notes&&<p style={{margin:"0 0 4px",color:"#6B5E4E",whiteSpace:"pre-wrap",fontSize:11}}>{t.notes}</p>}
+            {(t.checklist||[]).length>0&&<div style={{display:"flex",flexDirection:"column",gap:2}}>
               {(t.checklist||[]).map(item=>(
                 <div key={item.id} style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}
                   onClick={()=>updateTask(t.id,{checklist:(t.checklist||[]).map(i=>i.id===item.id?{...i,done:!i.done}:i)})}>
-                  <div style={{width:9,height:9,borderRadius:2,border:`1.5px solid ${item.done?"#1A7A43":"#C2B49E"}`,background:item.done?"#1A7A43":"transparent",flexShrink:0}}/>
+                  <div style={{width:9,height:9,borderRadius:2,border:"1.5px solid "+(item.done?"#1A7A43":"#C2B49E"),background:item.done?"#1A7A43":"transparent",flexShrink:0}}/>
                   <span style={{fontSize:11,color:item.done?"#9B8E80":"#6B5E4E",textDecoration:item.done?"line-through":"none"}}>{item.text}</span>
                 </div>
               ))}
-            </div>
-          )}
+            </div>}
+          </div>}
         </div>
-      ))}
-    </div>
   );
 }
 
@@ -828,11 +856,11 @@ function NotesView({sections,byId,getSectionNotes,addNote,updateNoteField,delete
   return (
     <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 100px)",minHeight:600,background:"#EBE4D8",borderRadius:14,overflow:"hidden",border:"1px solid #D6CEC3"}}>
       {/* Section tab bar */}
-      <div style={{display:"flex",alignItems:"stretch",background:"#1C1714",flexShrink:0,overflowX:"auto",padding:"0 6px"}}>
+      <div style={{display:"flex",alignItems:"stretch",background:"#1C1714",flexShrink:0,flexWrap:"wrap",padding:"0 6px"}}>
         {sections.map(s=>{
           const active=secId===s.id;
           return (
-            <button key={s.id} onClick={()=>{setSecId(s.id);setSelNoteId(null);setConfirmDel(null);}} style={{padding:"10px 16px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap",background:active?s.color:"transparent",color:active?textFor(s.color):"#7A6C5E",borderBottom:active?`3px solid ${s.color}`:"3px solid transparent",transition:"all 0.15s",flexShrink:0}}>{s.label}</button>
+            <button key={s.id} onClick={()=>{setSecId(s.id);setSelNoteId(null);setConfirmDel(null);}} style={{padding:"10px 16px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap",background:active?s.color:"transparent",color:active?textFor(s.color):"#7A6C5E",borderBottom:active?"3px solid "+s.color:"3px solid transparent",transition:"all 0.15s"}}>{s.label}</button>
           );
         })}
       </div>
@@ -896,6 +924,7 @@ function NotesView({sections,byId,getSectionNotes,addNote,updateNoteField,delete
 // ─── Note Editor ──────────────────────────────────────────────────────────────
 
 function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,onFocusTitleDone,tasks,setView,secId,updateNoteField,allTags}) {
+  var openCtx=React.useContext(CtxMenuCtx);
   var navCtx=React.useContext(NavCtx)||{};
   var navTo=navCtx.navigateTo;
   var navigateToDate=navCtx.navigateToDate;
@@ -996,6 +1025,31 @@ function NoteEditor({note,sectionColor,onTitleChange,onContentChange,focusTitle,
     },
     editorProps: {
       attributes: { class: "note-editor", style: "padding:20px 24px;font-family:\"DM Sans\",sans-serif;font-size:13px;color:#1C1714;line-height:1.65;outline:none;flex:1;overflow-y:auto;" },
+      handleContextMenu: function(view, pos, event) {
+        if (!editor) return false;
+        event.preventDefault();
+        var sel = view.state.selection;
+        var hasSelection = !sel.empty;
+        var ctxItems = [];
+        if (hasSelection) {
+          ctxItems.push({label:"Cut", action:function(){ document.execCommand("cut"); }});
+          ctxItems.push({label:"Copy", action:function(){ document.execCommand("copy"); }});
+        }
+        ctxItems.push({label:"Paste", action:function(){ navigator.clipboard.readText().then(function(txt){ if(txt && editor) editor.chain().focus().insertContent(txt).run(); }); }});
+        ctxItems.push({divider:true});
+        ctxItems.push({label:"Select All", action:function(){ editor.chain().focus().selectAll().run(); }});
+        if (hasSelection) {
+          ctxItems.push({divider:true});
+          ctxItems.push({label:"Bold", action:function(){ editor.chain().focus().toggleBold().run(); }});
+          ctxItems.push({label:"Italic", action:function(){ editor.chain().focus().toggleItalic().run(); }});
+          ctxItems.push({label:"Underline", action:function(){ editor.chain().focus().toggleUnderline().run(); }});
+          ctxItems.push({label:"Highlight", action:function(){ editor.chain().focus().toggleHighlight().run(); }});
+          ctxItems.push({divider:true});
+          ctxItems.push({label:"Clear Formatting", action:function(){ editor.chain().focus().unsetAllMarks().clearNodes().run(); }});
+        }
+        if (openCtx) openCtx(event, ctxItems);
+        return true;
+      },
       handleClick: function(view, pos, event) {
         setShowClr(false); setShowTaskPick(false); setShowDatePick(false);
         var dateChip = event.target.closest(".note-date-chip");
