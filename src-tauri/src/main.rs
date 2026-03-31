@@ -31,6 +31,11 @@ fn fire_notification(app: tauri::AppHandle, title: String, body: String) {
 
 #[tauri::command]
 async fn check_update(app: tauri::AppHandle) -> Result<Option<UpdatePayload>, String> {
+    // Skip update checks in dev builds to avoid noisy network errors
+    #[cfg(debug_assertions)]
+    { return Ok(None); }
+
+    #[cfg(not(debug_assertions))]
     match app.updater() {
         Ok(updater) => match updater.check().await {
             Ok(Some(update)) => Ok(Some(UpdatePayload {
