@@ -1,3 +1,19 @@
+## v2.8.0 — Editor Context Menu, Task Details & Dev Fixes
+
+**Note editor right-click menu**
+Right-clicking inside the note editor now opens a context menu with Cut, Copy, Paste, and Select All. When text is selected, additional formatting options appear: Bold, Italic, Underline, Highlight, and Clear Formatting.
+
+**Expandable task details in Today dashboard**
+Tasks with notes or checklists now show a `+` button next to their title in the Today dashboard. Click to expand and see the description and checklist inline — works in both the Upcoming Digest and the Schedule section's task columns.
+
+**Notes section tab wrapping**
+The section tab bar in the Notes view now wraps to a second row instead of producing a horizontal scrollbar when there are many sections.
+
+**Dev mode: skip update check**
+Running the app via `tauri dev` no longer triggers an update check on startup, avoiding noisy network errors during development.
+
+---
+
 ## v2.7.0 — Tally Trackers, Reminders & Dashboard Control
 
 **Tally trackers**
