@@ -737,7 +737,9 @@ function App() {
               var allNotes=Object.values(notes||{}).flat();
               var q=notePickerQ.toLowerCase();
               var filtered=q?allNotes.filter(function(n){return n.title&&n.title.toLowerCase().indexOf(q)>=0;}):allNotes.slice(0,20);
-              return <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:300,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:10,padding:8,minWidth:260,maxHeight:280,boxShadow:"0 6px 24px rgba(0,0,0,0.18)"}}>
+              return <div>
+                <div onClick={function(){setShowNotePicker(false);setNotePickerQ("");}} style={{position:"fixed",inset:0,zIndex:299}}/>
+                <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:300,background:"#FDFAF6",border:"1.5px solid #E3D9CC",borderRadius:10,padding:8,minWidth:260,maxHeight:280,boxShadow:"0 6px 24px rgba(0,0,0,0.18)"}}>
                 <div style={{fontSize:10,fontWeight:700,color:"#7A6C5E",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:6}}>Pin a Note</div>
                 <input value={notePickerQ} onChange={e=>setNotePickerQ(e.target.value)} placeholder="Search notes\u2026" autoFocus
                   style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #E3D9CC",fontSize:11,marginBottom:6,outline:"none"}}/>
@@ -749,7 +751,7 @@ function App() {
                   style={{fontSize:12,padding:"5px 8px",borderRadius:6,cursor:"pointer",color:"#1C1714",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                   {n.title||"Untitled"}</div>;})}
                 </div>
-              </div>;
+              </div></div>;
             })()}
           </div>
           <button onClick={()=>setShowIO(true)} title="Import / Export Data" style={{padding:"6px 10px",borderRadius:8,border:"1px solid #3A302A",background:"transparent",color:"#7A6C5E",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>&#x21C5;<span className="hdr-btn-label"> Data</span></button>

@@ -667,6 +667,8 @@ var WALKTHROUGH_STEPS = [
   { target:null, view:"trackers", title:"Trackers", body:"Track daily habits (did you run today?) and tally occurrences (how many glasses of water?). See streaks, weekly grids, and a monthly calendar.", position:"center" },
   { target:".cap-btn", view:null, title:"Quick Capture", body:"Press Ctrl+Space from anywhere to quickly add a task or note without leaving your current view. You can also set a reminder right from here.", position:"bottom" },
   { target:"[title='Search (Ctrl+K)']", view:null, title:"Search", body:"Press Ctrl+K to search across all tasks, notes, timetable blocks, and trackers. Results are grouped by type with colour-coded badges.", position:"bottom" },
+  { target:"[title^='Show today']", view:null, title:"Pin Today", body:"Float a compact dashboard showing today's schedule and active tasks. It stays visible as you navigate between views \u2014 great for keeping your day in sight.", position:"bottom" },
+  { target:"[title='Pin a note']", view:null, title:"Pin a Note", body:"Pin any note as a draggable floating panel. Keep reference material or meeting notes visible while working in other views.", position:"bottom" },
   { target:"[title='Settings']", view:null, title:"Settings & Data", body:"Manage your sections, configure backups, import/export data, and customise the app. Your data is stored locally and is always yours.", position:"bottom" },
 ];
 

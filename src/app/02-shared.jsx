@@ -377,14 +377,24 @@ var VIEW_HELP = {
     ],
     shortcuts: []
   },
-  monthly: {
-    title: "Calendar & Log",
-    summary: "Two views in one tab. Calendar shows tasks by due date on a monthly grid. Log is a chronological record of completed tasks.",
+  calendar: {
+    title: "Calendar",
+    summary: "A monthly grid view of your tasks by due date. See at a glance which days are busy and which sections have work scheduled.",
     actions: [
-      "Click a date in the calendar to navigate to that day\u2019s timetable",
-      "Coloured dots show which sections have tasks due",
-      "Switch between Calendar and Log with the tab toggle",
-      "The Log view groups completions by month",
+      "Click a date to navigate to that day\u2019s timetable",
+      "Coloured dots show which sections have tasks due on each day",
+      "Use the arrows to move between months",
+      "Switch to the Log tab to see completed tasks chronologically",
+    ],
+    shortcuts: []
+  },
+  monthly: {
+    title: "Log",
+    summary: "A chronological record of completed tasks, grouped by month. See your productivity history and track what you\u2019ve accomplished.",
+    actions: [
+      "Completed tasks are grouped by the month they were finished",
+      "Each entry shows the task title, section, and completion date",
+      "Switch to the Calendar tab for a date-based overview",
     ],
     shortcuts: []
   },
