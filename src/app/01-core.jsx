@@ -578,6 +578,19 @@ function buildShowcaseData() {
     makeBlock("section","learning","Blog Writing","14:00","15:30",[{type:"task",id:tL3,snapshot:"Write blog post draft"}]),
   ];
 
+  tt[thisWeekMon]["Saturday"] = [
+    makeBlock("section","health","Morning Run","08:00","09:00",[{type:"tracker",id:trH1,snapshot:"Morning Run"}]),
+    makeBlock("section","personal","Errands & Chores","10:00","12:00",[{type:"task",id:tP1,snapshot:"Grocery shopping"}]),
+    makeBlock("break",null,"Lunch","12:30","13:30"),
+    makeBlock("section","learning","Reading","14:00","15:30",[{type:"task",id:tL2,snapshot:"Read chapter 8 of Design Patterns"}]),
+  ];
+  tt[thisWeekMon]["Sunday"] = [
+    makeBlock("section","health","Yoga","09:00","10:00"),
+    makeBlock("section","personal","Trip Planning","10:30","12:00",[{type:"task",id:tP4,snapshot:"Plan weekend trip"},{type:"note",id:nP1,snapshot:"Trip Planning"}]),
+    makeBlock("break",null,"Lunch","12:30","13:30"),
+    makeBlock("section","health","Meal Prep","14:00","16:00",[{type:"task",id:tH2,snapshot:"Meal prep Sunday"}]),
+  ];
+
   // Last week (lighter, for historical data)
   tt[lastWeekMon] = {};
   tt[lastWeekMon]["Monday"] = [
@@ -606,6 +619,16 @@ function buildShowcaseData() {
     makeBlock("section","work","Weekly Review","09:00","10:30"),
     makeBlock("break",null,"Lunch","12:00","13:00"),
     makeBlock("section","work","Wrap-up","14:00","16:00"),
+  ];
+  tt[lastWeekMon]["Saturday"] = [
+    makeBlock("section","health","Morning Run","08:00","09:00"),
+    makeBlock("section","personal","Household","10:00","12:00"),
+    makeBlock("section","learning","Side Project","14:00","16:00"),
+  ];
+  tt[lastWeekMon]["Sunday"] = [
+    makeBlock("section","health","Yoga","09:00","10:00"),
+    makeBlock("section","personal","Free Time","11:00","13:00"),
+    makeBlock("section","health","Meal Prep","14:00","16:00"),
   ];
 
   // ── Template
