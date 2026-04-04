@@ -20,12 +20,12 @@ Pure function, no fuss or flash. Two core principles:
 ## App Source Files (`src/app/`)
 | File | Contents |
 |------|----------|
-| `01-core.jsx` | React destructuring, contexts, constants, helpers, storage, migrations, styles |
-| `02-shared.jsx` | Micro components (Dot, Badge, Cap, Pill, Empty, Overlay), ColorPicker, TimePicker, ContextMenu, AppDialog |
+| `01-core.jsx` | React destructuring, contexts, constants, helpers, storage, migrations, Tiptap extensions, `buildSeedData`, `buildShowcaseData` |
+| `02-shared.jsx` | Micro components (Dot, Badge, Cap, Pill, Empty, Overlay), ColorPicker, TimePicker, ContextMenu, AppDialog, `VIEW_HELP`, `HelpPanel` |
 | `03-modals.jsx` | QuickCapture, Search, Schedule, ImportExport, Block, Template, AddTask, TaskEdit, SectionDelete, UpdateDialog |
-| `04-views.jsx` | TodayView, TimetableView, BoardsView, NotesView, TrackersView, MonthlyView, StatsView, TrackerCreateModal, SettingsModal |
-| `05-overlays.jsx` | TrackerNavPanel, NavOverlay, NoteDeleteOverlay, TaskPanel, NotePanel, PinOverlay |
-| `06-app.jsx` | ErrorBoundary, App component, ReactDOM.createRoot render call |
+| `04-views.jsx` | TodayView, TimetableView, BoardsView, NotesView, NoteEditor, TrackersView, MonthlyView, StatsView, TrackerCreateModal, SettingsModal |
+| `05-overlays.jsx` | TrackerNavPanel, NavOverlay, NoteDeleteOverlay, TaskPanel, NotePanel, PinOverlay, NoteFloatOverlay, WelcomeOverlay, WalkthroughOverlay |
+| `06-app.jsx` | ErrorBoundary, App component, global styles, ReactDOM.createRoot render call |
 
 Files are loaded in numeric order — components must be defined before they are referenced (06-app.jsx references all others).
 
@@ -33,17 +33,22 @@ Files are loaded in numeric order — components must be defined before they are
 `tauri` (tray-icon), `tauri-plugin-fs`, `tauri-plugin-dialog`, `tauri-plugin-notification`, `tauri-plugin-autostart`, `tauri-plugin-updater`, `tauri-plugin-opener`, `serde`, `serde_json`
 
 ## Storage Keys
-Filesystem (AppData JSON files): `py-sections`, `py-tt`, `py-tasks`, `py-notes`, `py-trackers`, `py-tt-templates`, `py-tt-setblocks`, `py-tt-archive`, `py-export-path`, `py-skipped-version`, `py-backup-meta`, `py-backup-interval`, `py-walkthrough-done`
+Filesystem (AppData JSON files): `py-sections`, `py-tt`, `py-tasks`, `py-notes`, `py-trackers`, `py-tt-templates`, `py-tt-setblocks`, `py-tt-archive`, `py-export-path`, `py-skipped-version`, `py-backup-meta`, `py-backup-interval`, `py-walkthrough-done`, `py-editor-toolbar`
 SessionStorage: `py-cap-type`, `py-cap-sec`, `py-time-12h`, `py-recent-colors`
+localStorage: `py-today-order`
 
 ## Views (top nav)
 Today · Timetable · Taskboards · Notes · Trackers · Calendar · Log · Stats
 
 ## Key Architecture
-- `NavCtx` — React context providing `navigateTo`, `navigateToFresh`, `navigateBack`, `navigateToDate`, `navStack`, `navigateToIndex`, `setView`, `getDayBlocks`, `upsertBlock`, `sections`
+- `NavCtx` — React context providing `navigateTo`, `navigateToFresh`, `navigateBack`, `navigateToDate`, `navStack`, `navigateToIndex`, `setView`, `getDayBlocks`, `upsertBlock`, `setTt`, `sections`
 - `CtxMenuCtx` — provides `openCtx(e, items)` for right-click menus
 - `NavOverlay` — right-side drawer with breadcrumb trail; `TaskPanel` and `NotePanel` inside
 - `PinOverlay` — floating always-on-top dashboard panel showing today's schedule + active tasks
+- `NoteFloatOverlay` — draggable pinned note panel, independent of PinOverlay
+- `WelcomeOverlay` — first-launch screen (Take the Tour / Start Fresh)
+- `WalkthroughOverlay` — 11-step guided tour with positioned tooltip bubbles and backdrop cutout
+- `HelpPanel` — per-view help card opened via global `?` button
 - `ErrorBoundary` — class component wrapping `<App/>`, catches render errors with recovery UI
 
 ## Data Schemas
@@ -51,19 +56,21 @@ Today · Timetable · Taskboards · Notes · Trackers · Calendar · Log · Stat
 **Note:** `{id, parentId, title, content, order, createdAt, tags[], linkedTaskIds[], linkedTrackerIds[], remindAt, remindFired}`
 **Block:** `{id, type, sectionId, label, start, end, linkedItems[{type, id, snapshot}]}`
 **Template:** `{id, name, color, blocks: {Monday:[…], …}}`
-**Tracker:** `{id, title, sectionId, color, activeDays[7], completions{}, linkedTaskIds[], linkedNoteIds[], order, archived, createdAt}`
+**Tracker:** `{id, title, sectionId, color, mode("habit"|"tally"), activeDays[7], completions{}, linkedTaskIds[], linkedNoteIds[], order, archived, createdAt}`
 
 ## Key Components
-`TodayView`, `TimetableView`, `BoardsView`, `NotesView`, `TrackersView`, `MonthlyView` (Calendar+Log tabs), `StatsView`, `TaskCard`, `TaskEditModal`, `ScheduleTaskModal`, `BlockModal`, `TemplateModal`, `NoteEditor`, `NavOverlay`, `TaskPanel`, `NotePanel`, `TrackerNavPanel`, `PinOverlay`, `TimePicker` (radial, 12h/24h, portal dropdown), `ColorPicker` (presets + recent + custom), `QuickCaptureModal`, `ImportExportModal`, `SettingsModal`, `TrackerCreateModal`, `SectionDeleteOverlay`
+`TodayView`, `TimetableView`, `BoardsView`, `NotesView`, `NoteEditor`, `TrackersView`, `MonthlyView` (Calendar+Log tabs), `StatsView`, `TaskCard`, `TaskEditModal`, `ScheduleTaskModal`, `BlockModal`, `TemplateModal`, `NavOverlay`, `TaskPanel`, `NotePanel`, `TrackerNavPanel`, `PinOverlay`, `NoteFloatOverlay`, `TimePicker` (radial, 12h/24h, portal dropdown), `ColorPicker` (presets + recent + custom), `QuickCaptureModal`, `ImportExportModal`, `SettingsModal`, `TrackerCreateModal`, `SectionDeleteOverlay`, `WelcomeOverlay`, `WalkthroughOverlay`, `HelpPanel`
 
 ## Rust Commands
-`app_version`, `fire_notification`, `check_update`, `install_update`
+`app_version`, `fire_notification`, `check_update` (skipped in debug builds), `install_update`
 
 ## Storage Functions
 - `sget(key)` — read JSON file from AppData
 - `sset(key, value)` — write JSON file to AppData (immediate)
 - `ssetDebounced(key, value, delay=800)` — debounced write, used by all useEffect persistence watchers
 - `runBackupIfDue(force)` — automatic backup to `AppData/backups/`, configurable interval
+- `buildSeedData()` — lightweight demo data for first run
+- `buildShowcaseData()` — rich, realistic dataset for screenshots and guided tour
 
 ## Babel/Escape Constraints — STRICTLY OBSERVED
 These constraints are non-negotiable. Violating them will break the app at compile time with no useful error message.
@@ -77,7 +84,7 @@ These constraints are non-negotiable. Violating them will break the app at compi
 `index.html` uses a resilient async loader: tries `./vendor/*.min.js` first (offline), falls back to CDN (dev mode only), shows a visible error if both fail. After vendors load, it fetches all 6 `src/app/*.jsx` files via `fetch()`, concatenates them in order, and compiles via `Babel.transform()` with presets `['env', 'react']`.
 
 ## Current Version
-2.8.0
+3.0.0
 
 ## Release Process
 ```
@@ -92,6 +99,7 @@ The GitHub Actions workflow in `.github/workflows/release.yml` builds the MSI, s
 - Phase 2 Mobile (deferred): Tauri mobile target + LAN sync
 - Node.js deprecation: `actions/checkout@v4` and `actions/setup-node@v4` will drop Node 20 before June 2026 — update CI before then
 - Babel "Script error" in dev — does not affect production, cause not yet isolated
+- Consider splitting `04-views.jsx` (~2600 lines) if another major view feature lands
 
 ## How to Work on This Project
 1. Read the relevant `src/app/*.jsx` file before making changes — use the table above to find the right file

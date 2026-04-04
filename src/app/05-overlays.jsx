@@ -686,6 +686,15 @@ function WalkthroughOverlay(props) {
   var [targetRect, setTargetRect] = useState(null);
 
   useEffect(function() {
+    function onKey(e) {
+      if (e.key === "Enter" || e.key === "ArrowRight") { e.preventDefault(); if (isFinish) return; onNext(); }
+      if (e.key === "Escape") { e.preventDefault(); onSkip(); }
+    }
+    window.addEventListener("keydown", onKey);
+    return function() { window.removeEventListener("keydown", onKey); };
+  }, [step, isFinish]);
+
+  useEffect(function() {
     if (isFinish) { setTipPos(null); setTargetRect(null); return; }
     var s = WALKTHROUGH_STEPS[step];
     if (s.view && s.view !== view) { setView(s.view); }
