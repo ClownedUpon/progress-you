@@ -298,7 +298,7 @@ function MiniColTask({task,secColor,updateTask,completeTask,navigateTo,hasDetail
 
 function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
                         templates,addTemplate,updateTemplate,deleteTemplate,applyTemplate,
-                        tasks,notes,setBlocks,addSetBlock,removeSetBlock,reorderSetBlock,trackers}) {
+                        tasks,notes,setBlocks,addSetBlock,removeSetBlock,reorderSetBlock,trackers,week}) {
   const openCtx = React.useContext(CtxMenuCtx);
   const {navigateTo} = React.useContext(NavCtx)||{};
   const allNotes = Object.values(notes||{}).flat();
@@ -447,12 +447,17 @@ function TimetableView({sections,byId,getDayBlocks,upsertBlock,deleteBlock,
 
       {/* Week grid */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:10}}>
-        {DAYS.map(day=>{
+        {DAYS.map(function(day,di){
           const blocks=getDayBlocks(day);
+          var dayDate=week?new Date(week+"T12:00:00"):null;
+          if(dayDate){dayDate.setDate(dayDate.getDate()+di);}
+          var dateLabel=dayDate?dayDate.toLocaleDateString("en-GB",{day:"numeric",month:"short"}):"";
+          var isToday=dayDate&&dayDate.toISOString().slice(0,10)===todayISO();
           return (
             <div key={day} data-ttday={day}>
-              <div style={{marginBottom:10,paddingBottom:8,borderBottom:"2px solid #E3D9CC"}}>
-                <span style={{fontFamily:'"Playfair Display",serif',fontWeight:700,fontSize:14}}>{day}</span>
+              <div style={{marginBottom:10,paddingBottom:8,borderBottom:"2px solid "+(isToday?"#C8A86B":"#E3D9CC")}}>
+                <span style={{fontFamily:'"Playfair Display",serif',fontWeight:700,fontSize:14,color:isToday?"#C8A86B":"inherit"}}>{day}</span>
+                {dateLabel&&<span style={{fontSize:10,color:isToday?"#C8A86B":"#9B8E80",marginLeft:6,fontWeight:isToday?700:400}}>{dateLabel}</span>}
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:7}}>
                 {blocks.map(blk=>{
@@ -833,8 +838,8 @@ function NotesView({sections,byId,getSectionNotes,addNote,updateNoteField,delete
         <div className={`note-row${isActive?" active":""}`} style={{paddingLeft:8+depth*16}} onClick={()=>setSelNoteId(node.id)}
           onContextMenu={e=>{ if(!openCtx) return; openCtx(e,[
             {label:"Rename",         action:()=>{ setSelNoteId(node.id); setRenameTrigger(node.id); }},
-            {label:"New child note", action:()=>addNote(secId,node.id)},
-            {label:"Duplicate",      action:()=>addNote(secId,node.parentId||null,{title:node.title+" (copy)",content:node.content})},
+            {label:"New child note", action:()=>{var nid=addNote(secId,node.id);if(nid)setSelNoteId(nid);}},
+            {label:"Duplicate",      action:()=>{var nid=addNote(secId,node.parentId||null,{title:node.title+" (copy)",content:node.content});if(nid)setSelNoteId(nid);}},
             {divider:true},
             {label:"Delete",danger:true,action:()=>handleDelete(node.id)},
           ]); }}>
@@ -844,7 +849,7 @@ function NotesView({sections,byId,getSectionNotes,addNote,updateNoteField,delete
           </button>
           <span style={{fontSize:12,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:isActive?600:400}}>{node.title||"Untitled"}</span>
           <div className="note-actions">
-            <button className="note-act-btn" title="Add sub-note" onClick={e=>{e.stopPropagation();addNote(secId,node.id);}}>+</button>
+            <button className="note-act-btn" title="Add sub-note" onClick={e=>{e.stopPropagation();var nid=addNote(secId,node.id);if(nid)setSelNoteId(nid);}}>+</button>
             <button className="note-act-btn" title="Delete" onClick={e=>{e.stopPropagation();handleDelete(node.id);}}>✕</button>
           </div>
         </div>
@@ -898,8 +903,8 @@ function NotesView({sections,byId,getSectionNotes,addNote,updateNoteField,delete
           </div>
           {confirmDel&&<NoteDeleteOverlay hasChildren={noteDescendants(items,confirmDel).length>0} onConfirm={()=>{deleteNote(secId,confirmDel);setConfirmDel(null);}} onClose={()=>setConfirmDel(null)}/>}
           <div style={{padding:"9px 8px",borderTop:"1px solid #D6CEC3",display:"flex",gap:5,flexShrink:0}}>
-            <button onClick={()=>addNote(secId,selNote?.parentId||null)} style={{...S.btnDark,flex:1,background:sec.color,padding:"7px 0",fontSize:11}}>+ Note</button>
-            <button onClick={()=>{ if(selNote) addNote(secId,selNote.id); }} style={{...S.btnGhost,padding:"7px 10px",fontSize:11,opacity:selNote?1:0.45}}>+Child</button>
+            <button onClick={()=>{var nid=addNote(secId,selNote?selNote.parentId:null);if(nid)setSelNoteId(nid);}} style={{...S.btnDark,flex:1,background:sec.color,padding:"7px 0",fontSize:11}}>+ Note</button>
+            <button onClick={()=>{ if(selNote){var nid=addNote(secId,selNote.id);if(nid)setSelNoteId(nid);} }} style={{...S.btnGhost,padding:"7px 10px",fontSize:11,opacity:selNote?1:0.45}}>+Child</button>
           </div>
         </div>
         <div style={{background:"#FDFAF6",display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -2297,6 +2302,7 @@ function SettingsModal({sections,setSections,onClose,checkForUpdate,tasks,setTas
   const [delOverlay, setDelOverlay] = useState(null); // {secId, secLabel, secColor}
   const [backupHrs,  setBackupHrs]  = useState(DEFAULT_BACKUP_HOURS);
   const [backupSaved,setBackupSaved]= useState(false);
+  var [dataConfirm, setDataConfirm] = useState(null);
 
   useEffect(()=>{
     try {
@@ -2408,9 +2414,9 @@ function SettingsModal({sections,setSections,onClose,checkForUpdate,tasks,setTas
       {/* ── Sections tab */}
       {tab==="sections"&&(<>
         <p style={{fontSize:12,color:"#9B8E80",marginBottom:18,lineHeight:1.5}}>Add, rename, or recolour sections. Removing a section lets you choose what happens to its tasks, notes, and timetable blocks.</p>
-        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:22}}>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:22,maxHeight:320,overflowY:"auto",padding:"2px 0"}}>
           {local.map(s=>(
-            <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,background:"#F3EDE3",borderRadius:10,padding:"10px 12px"}}>
+            <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,background:"#F3EDE3",borderRadius:10,padding:"10px 12px",flexShrink:0}}>
               <div style={{minWidth:220}}><ColorPicker value={s.color} onChange={v=>upd(s.id,{color:v})}/></div>
               <input value={s.label} onChange={e=>upd(s.id,{label:e.target.value})} style={{...S.input,marginBottom:0,flex:1,padding:"6px 10px"}}/>
               <button onClick={()=>requestRemove(s)} style={{...S.btnMicro,background:"#FAE0E0",color:"#C43A3A",flexShrink:0}}
@@ -2497,17 +2503,8 @@ function SettingsModal({sections,setSections,onClose,checkForUpdate,tasks,setTas
                 <div style={{fontSize:12,fontWeight:600,color:"#1C1714"}}>Demo Data</div>
                 <div style={{fontSize:11,color:"#6B5E4E",marginTop:2}}>Load sample tasks, notes, trackers, and timetable blocks to explore features.</div>
               </div>
-              <button onClick={function(){
-                try {
-                  var seed = buildSeedData();
-                  setSections(DEFAULT_SECTIONS.map(function(s){ return Object.assign({},s); }));
-                  setTasks(seed.tasks);
-                  setNotes(seed.notes);
-                  setTrackers(seed.trackers);
-                  setTt(seed.tt);
-                  onClose();
-                } catch(e) { console.error("Seed data error:", e); }
-              }} style={{...S.btnGhost,fontSize:11,padding:"5px 14px",flexShrink:0}}>Load Demo</button>
+              <button onClick={function(){setDataConfirm("demo");}}
+                style={{...S.btnGhost,fontSize:11,padding:"5px 14px",flexShrink:0}}>Load Demo</button>
             </div>
           </div>
 
@@ -2517,17 +2514,8 @@ function SettingsModal({sections,setSections,onClose,checkForUpdate,tasks,setTas
                 <div style={{fontSize:12,fontWeight:600,color:"#1C1714"}}>Showcase Data</div>
                 <div style={{fontSize:11,color:"#6B5E4E",marginTop:2}}>Load a rich, realistic workspace with filled-out tasks, notes, trackers, and a full timetable.</div>
               </div>
-              <button onClick={function(){
-                try {
-                  var showcase = buildShowcaseData();
-                  setSections(showcase.sections);
-                  setTasks(showcase.tasks);
-                  setNotes(showcase.notes);
-                  setTrackers(showcase.trackers);
-                  setTt(showcase.tt);
-                  onClose();
-                } catch(e) { console.error("Showcase data error:", e); }
-              }} style={{...S.btnGhost,fontSize:11,padding:"5px 14px",flexShrink:0}}>Load Showcase</button>
+              <button onClick={function(){setDataConfirm("showcase");}}
+                style={{...S.btnGhost,fontSize:11,padding:"5px 14px",flexShrink:0}}>Load Showcase</button>
             </div>
           </div>
 
@@ -2535,12 +2523,49 @@ function SettingsModal({sections,setSections,onClose,checkForUpdate,tasks,setTas
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
               <div>
                 <div style={{fontSize:12,fontWeight:600,color:"#1C1714"}}>Guided Tour</div>
-                <div style={{fontSize:11,color:"#6B5E4E",marginTop:2}}>Restart the onboarding walkthrough with showcase data. Replaces current data.</div>
+                <div style={{fontSize:11,color:"#6B5E4E",marginTop:2}}>Restart the onboarding walkthrough with showcase data.</div>
               </div>
-              <button onClick={function(){if(onRestartTour) onRestartTour();}}
+              <button onClick={function(){setDataConfirm("tour");}}
                 style={{...S.btnGhost,fontSize:11,padding:"5px 14px",flexShrink:0}}>Restart Tour</button>
             </div>
           </div>
+
+          {dataConfirm&&<div style={{position:"fixed",inset:0,background:"rgba(28,23,20,0.72)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:500,padding:20}}>
+            <div onClick={function(e){e.stopPropagation();}} style={{background:"#FDFAF6",borderRadius:14,padding:"26px 28px",width:420,maxWidth:"100%",boxShadow:"0 28px 72px rgba(0,0,0,0.42)",border:"1px solid #E3D9CC"}}>
+              <div style={{fontFamily:'"Playfair Display",serif',fontSize:17,fontWeight:700,color:"#C43A3A",marginBottom:10}}>Replace all data?</div>
+              <p style={{fontSize:13,color:"#4A3F30",lineHeight:1.55,marginBottom:6}}>
+                <strong style={{color:"#C43A3A"}}>This will permanently delete all your existing tasks, notes, trackers, and timetable data.</strong>
+              </p>
+              <p style={{fontSize:12,color:"#6B5E4E",lineHeight:1.5,marginBottom:18}}>Consider exporting a backup first using the Data button in the header.</p>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={function(){
+                  runBackupIfDue(true);
+                  setDataConfirm(null);
+                }} style={{...S.btnGhost,flex:1,fontSize:12,padding:"8px 0",background:"#EAF7EF",color:"#1A7A43",border:"1.5px solid #1A7A43"}}>Backup First</button>
+                <button onClick={function(){
+                  var mode=dataConfirm;
+                  setDataConfirm(null);
+                  if(mode==="demo"){
+                    try{
+                      var seed=buildSeedData();
+                      setSections(DEFAULT_SECTIONS.map(function(s){return Object.assign({},s);}));
+                      setTasks(seed.tasks);setNotes(seed.notes);setTrackers(seed.trackers);setTt(seed.tt);
+                      onClose();
+                    }catch(e){console.error("Seed data error:",e);}
+                  }else if(mode==="showcase"){
+                    try{
+                      var sc=buildShowcaseData();
+                      setSections(sc.sections);setTasks(sc.tasks);setNotes(sc.notes);setTrackers(sc.trackers);setTt(sc.tt);
+                      onClose();
+                    }catch(e){console.error("Showcase data error:",e);}
+                  }else if(mode==="tour"){
+                    if(onRestartTour) onRestartTour();
+                  }
+                }} style={{...S.btnDark,flex:1,fontSize:12,padding:"8px 0",background:"#C43A3A",border:"none"}}>Delete &amp; Replace</button>
+                <button onClick={function(){setDataConfirm(null);}} style={{...S.btnGhost,flex:1,fontSize:12,padding:"8px 0"}}>Cancel</button>
+              </div>
+            </div>
+          </div>}
 
           <div style={{textAlign:"center",color:"#C2B49E",fontSize:11}}>
             {appVer ? "Progress You  \u00B7  v" + appVer : "Progress You  \u00B7  Dev build"}

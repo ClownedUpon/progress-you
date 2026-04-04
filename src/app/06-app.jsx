@@ -105,7 +105,10 @@ function App() {
 
   useEffect(()=>{
     const isDev=!!window.location.port;
-    if(!isDev) document.addEventListener('contextmenu', e => e.preventDefault());
+    if(!isDev) document.addEventListener('contextmenu', function(e) {
+      if(e.target.closest&&e.target.closest('.note-editor')) return;
+      e.preventDefault();
+    });
     (async()=>{
       try { if(window.__TAURI__?.fs){ const { mkdir, BaseDirectory } = window.__TAURI__.fs; await mkdir(".", { baseDir: BaseDirectory.AppData, recursive: true }); } } catch(e) {}
       const sec=await sget("py-sections");
@@ -454,14 +457,16 @@ function App() {
   // ── Notes ops
   const getSectionNotes=sid=>{ const val=notes[sid]; return Array.isArray(val)?val:[]; };
   function addNote(sid,parentId=null,opts={}){
+    var newId=opts.id||uid();
     setNotes(prev=>{
       const items=prev[sid]||[];
       const siblings=items.filter(n=>n.parentId===(parentId||null));
       const order=siblings.length?Math.max(...siblings.map(n=>n.order))+1:0;
       const base=makeNote(parentId,order);
-      const newNote={...base,...(opts.id?{id:opts.id}:{}),...(opts.title?{title:opts.title}:{}),...(opts.content?{content:opts.content}:{}),...(opts.linkedTrackerIds?{linkedTrackerIds:opts.linkedTrackerIds}:{})};
+      const newNote={...base,id:newId,...(opts.title?{title:opts.title}:{}),...(opts.content?{content:opts.content}:{}),...(opts.linkedTrackerIds?{linkedTrackerIds:opts.linkedTrackerIds}:{})};
       return{...prev,[sid]:[...items,newNote]};
     });
+    return newId;
   }
   function updateNoteField(sid,noteId,upd){
     setNotes(prev=>({...prev,[sid]:(prev[sid]||[]).map(n=>n.id===noteId?{...n,...upd}:n)}));
@@ -761,7 +766,7 @@ function App() {
 
       <main style={{padding:"24px 28px",maxWidth:1500,margin:"0 auto"}}>
         {view==="today"     && <TodayView     {...tp} getDayBlocks={getDayBlocks} onOpenCapture={()=>setShowCap(true)} trackers={trackers} toggleTrackerDay={toggleTrackerDay}/>}
-        {view==="timetable" && <TimetableView sections={sections} byId={byId} getDayBlocks={getDayBlocks} upsertBlock={upsertBlock} deleteBlock={deleteBlock} templates={templates} addTemplate={addTemplate} updateTemplate={updateTemplate} deleteTemplate={deleteTemplate} applyTemplate={applyTemplate} tasks={tasks} notes={notes} setBlocks={setBlocks} addSetBlock={addSetBlock} removeSetBlock={removeSetBlock} reorderSetBlock={reorderSetBlock} trackers={trackers}/>}
+        {view==="timetable" && <TimetableView sections={sections} byId={byId} getDayBlocks={getDayBlocks} upsertBlock={upsertBlock} deleteBlock={deleteBlock} templates={templates} addTemplate={addTemplate} updateTemplate={updateTemplate} deleteTemplate={deleteTemplate} applyTemplate={applyTemplate} tasks={tasks} notes={notes} setBlocks={setBlocks} addSetBlock={addSetBlock} removeSetBlock={removeSetBlock} reorderSetBlock={reorderSetBlock} trackers={trackers} week={week}/>}
         {view==="boards"    && <BoardsView    {...tp} notes={notes} setView={setView} initialSecId={lastBoardSec} onSecChange={setLastBoardSec} archiveTask={archiveTask} archiveDoneTasks={archiveDoneTasks}/>}
         {view==="notes"     && <NotesView     sections={sections} byId={byId} getSectionNotes={getSectionNotes} addNote={addNote} updateNoteField={updateNoteField} deleteNote={deleteNote} tasks={tasks} setView={setView} initialSecId={lastNoteKey.sec} initialNoteId={lastNoteKey.id} onNoteChange={(sec,id)=>setLastNoteKey({sec,id})}/>}
         {view==="trackers"  && <TrackersView  trackers={trackers} addTracker={addTracker} updateTracker={updateTracker} deleteTracker={deleteTracker} toggleTrackerDay={toggleTrackerDay} archiveTracker={archiveTracker} sections={sections} byId={byId} tasks={tasks} notes={notes} addTask={addTask} addNote={addNote} linkTrackerToTask={linkTrackerToTask} unlinkTrackerFromTask={unlinkTrackerFromTask} linkTrackerToNote={linkTrackerToNote} unlinkTrackerFromNote={unlinkTrackerFromNote}/>}
