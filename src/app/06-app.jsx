@@ -97,6 +97,10 @@ function App() {
   const [showSearch,   setShowSearch]   = useState(false);
   const [trackers,     setTrackers]     = useState([]);
   const [undoStack,    setUndoStack]    = useState([]);
+  var [showHelp, setShowHelp] = useState(false);
+  var [showWelcome, setShowWelcome] = useState(false);
+  var [showWalkthrough, setShowWalkthrough] = useState(false);
+  var [walkStep, setWalkStep] = useState(0);
   const undoTimers = useRef({});
 
   useEffect(()=>{
@@ -112,7 +116,10 @@ function App() {
       const sb=await sget('py-tt-setblocks');
       const trk=await sget('py-trackers');
       const isFirstRun = !sec && !t && !k && !n && !tmpl && !sb && !trk;
-      if (isFirstRun) {
+      var walkthroughDone = await sget("py-walkthrough-done");
+      if (isFirstRun && !walkthroughDone) {
+        setShowWelcome(true);
+      } else if (isFirstRun) {
         try {
           const seed = buildSeedData();
           setTasks(seed.tasks);
@@ -141,6 +148,54 @@ function App() {
   useEffect(()=>{ if(ready) ssetDebounced("py-tasks",tasks); },[tasks,ready]);
   useEffect(()=>{ if(ready) ssetDebounced("py-notes",notes); },[notes,ready]);
   useEffect(()=>{ if(ready) ssetDebounced("py-trackers",trackers); },[trackers,ready]);
+
+  // ── Walkthrough handlers
+  function handleTakeTour() {
+    setShowWelcome(false);
+    try {
+      var showcase = buildShowcaseData();
+      setSections(showcase.sections);
+      setTasks(showcase.tasks);
+      setNotes(showcase.notes);
+      setTrackers(showcase.trackers);
+      setTt(showcase.tt);
+      setTemplates(showcase.templates);
+    } catch(e) { console.error("Showcase data error:", e); }
+    setReady(true);
+    setShowWalkthrough(true);
+    setWalkStep(0);
+  }
+  function handleStartFresh() {
+    setShowWelcome(false);
+    setReady(true);
+    sset("py-walkthrough-done", true);
+  }
+  function handleFinishTour(keepData) {
+    setShowWalkthrough(false);
+    sset("py-walkthrough-done", true);
+    if (!keepData) {
+      setSections(DEFAULT_SECTIONS.map(function(s) { return Object.assign({}, s); }));
+      setTasks([]);
+      setNotes({});
+      setTrackers([]);
+      setTt({});
+      setTemplates([]);
+      setSetBlocks([]);
+    }
+  }
+  function handleRestartTour() {
+    try {
+      var showcase = buildShowcaseData();
+      setSections(showcase.sections);
+      setTasks(showcase.tasks);
+      setNotes(showcase.notes);
+      setTrackers(showcase.trackers);
+      setTt(showcase.tt);
+      setTemplates(showcase.templates);
+    } catch(e) { console.error("Showcase data error:", e); }
+    setShowWalkthrough(true);
+    setWalkStep(0);
+  }
 
   // ── Undo system — tracks last 5 destructive actions
   function pushUndo(title,detail,undoFn){
@@ -714,7 +769,8 @@ function App() {
       </main>
 
       {showSett && <SettingsModal sections={sections} setSections={setSections} onClose={()=>setShowSett(false)} checkForUpdate={checkForUpdate}
-        tasks={tasks} setTasks={setTasks} notes={notes} setNotes={setNotes} tt={tt} setTt={setTt} trackers={trackers} setTrackers={setTrackers}/>}
+        tasks={tasks} setTasks={setTasks} notes={notes} setNotes={setNotes} tt={tt} setTt={setTt} trackers={trackers} setTrackers={setTrackers}
+        onRestartTour={function(){setShowSett(false);handleRestartTour();}}/>}
       {showIO   && <ImportExportModal onExport={exportData} onImport={importData} onClose={()=>setShowIO(false)} sections={sections}/>}
       {showCap  && <QuickCaptureModal sections={sections} byId={byId} addTask={addTask} addNote={addNote} onClose={()=>setShowCap(false)}/>}
       {showSearch && <SearchModal tasks={tasks} notes={notes} sections={sections} byId={byId} tt={tt} trackers={trackers} onClose={()=>setShowSearch(false)} setView={setView}/>}
@@ -726,6 +782,15 @@ function App() {
           onRemind={()=>setShowUpdate(false)}
         />
       )}
+      <button onClick={function(){setShowHelp(true);}} title="View help"
+        style={{position:"fixed",bottom:20,left:20,width:32,height:32,borderRadius:"50%",
+          background:"#EBE4D8",border:"1.5px solid #D6CEC3",color:"#6B5E4E",
+          fontSize:14,fontWeight:700,cursor:"pointer",zIndex:90,
+          display:"flex",alignItems:"center",justifyContent:"center",
+          boxShadow:"0 2px 8px rgba(0,0,0,0.1)"}}>?</button>
+      {showHelp && <HelpPanel viewKey={view} onClose={function(){setShowHelp(false);}}/>}
+      {showWelcome && <WelcomeOverlay onTour={handleTakeTour} onFresh={handleStartFresh}/>}
+      {showWalkthrough && <WalkthroughOverlay step={walkStep} onNext={function(){setWalkStep(function(s){return s+1;});}} onSkip={function(){handleFinishTour(true);}} onFinish={handleFinishTour} setView={setView} view={view}/>}
       {/* Toast banners (reminders + undo) */}
       <div style={{position:"fixed",bottom:20,right:20,zIndex:500,display:"flex",flexDirection:"column",gap:8,pointerEvents:"none"}}>
         {toasts.map(t=>(

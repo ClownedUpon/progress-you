@@ -33,7 +33,7 @@ Files are loaded in numeric order — components must be defined before they are
 `tauri` (tray-icon), `tauri-plugin-fs`, `tauri-plugin-dialog`, `tauri-plugin-notification`, `tauri-plugin-autostart`, `tauri-plugin-updater`, `tauri-plugin-opener`, `serde`, `serde_json`
 
 ## Storage Keys
-Filesystem (AppData JSON files): `py-sections`, `py-tt`, `py-tasks`, `py-notes`, `py-trackers`, `py-tt-templates`, `py-tt-setblocks`, `py-tt-archive`, `py-export-path`, `py-skipped-version`, `py-backup-meta`, `py-backup-interval`
+Filesystem (AppData JSON files): `py-sections`, `py-tt`, `py-tasks`, `py-notes`, `py-trackers`, `py-tt-templates`, `py-tt-setblocks`, `py-tt-archive`, `py-export-path`, `py-skipped-version`, `py-backup-meta`, `py-backup-interval`, `py-walkthrough-done`
 SessionStorage: `py-cap-type`, `py-cap-sec`, `py-time-12h`, `py-recent-colors`
 
 ## Views (top nav)

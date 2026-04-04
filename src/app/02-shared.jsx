@@ -51,12 +51,21 @@ function AutostartToggle() {
 function Pill({active,onClick,children}) {
   return <button onClick={onClick} style={{padding:"5px 14px",borderRadius:20,fontSize:11,fontWeight:600,border:active?"2px solid #1C1714":"1.5px solid #D6CEC3",background:active?"#1C1714":"transparent",color:active?"#F8F3EC":"#6B5E4E"}}>{children}</button>;
 }
-function Empty({icon,text,sub}) {
+function Empty({icon,text,sub,actions}) {
   return (
     <div style={{background:"#EBE4D8",borderRadius:14,padding:"36px 28px",textAlign:"center"}}>
       <div style={{fontSize:32,marginBottom:10}}>{icon}</div>
       <div style={{fontSize:14,fontWeight:600,color:"#4A3F30"}}>{text}</div>
       {sub&&<div style={{fontSize:12,color:"#9B8E80",marginTop:6}}>{sub}</div>}
+      {actions && actions.length > 0 && (
+        <div style={{marginTop:12,textAlign:"left",display:"inline-block"}}>
+          {actions.map(function(a, i) {
+            return <div key={i} style={{fontSize:11,color:"#7A6C5E",padding:"2px 0",display:"flex",alignItems:"flex-start",gap:6}}>
+              <span style={{color:"#C8A86B",flexShrink:0}}>{"\u2022"}</span><span>{a}</span>
+            </div>;
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -303,6 +312,123 @@ function TimePicker({value, onChange, label}) {
         document.body
       )}
     </div>
+  );
+}
+
+// ─── View Help Data & Panel ──────────────────────────────────────────────────
+
+var VIEW_HELP = {
+  today: {
+    title: "Today",
+    summary: "Your daily command centre. See what\u2019s scheduled, check upcoming deadlines, and track today\u2019s habits \u2014 all in one place.",
+    actions: [
+      "Complete trackers directly from the dashboard",
+      "Click any task to open it in the side panel",
+      "Expand tasks with the + button to see notes and checklists",
+      "Rearrange dashboard sections with the Arrange button",
+    ],
+    shortcuts: [["Ctrl+Space", "Quick Capture"], ["Ctrl+K", "Search"]]
+  },
+  timetable: {
+    title: "Timetable",
+    summary: "Plan your week with time blocks. Each block belongs to a section and can link to tasks and notes, so your schedule and to-dos stay connected.",
+    actions: [
+      "Click an empty slot to create a new block",
+      "Right-click a block to edit, delete, or link items",
+      "Use Set Blocks on the right to stamp recurring blocks quickly",
+      "Save a full week as a Template and re-apply it later",
+      "Navigate weeks with the arrow buttons in the header",
+    ],
+    shortcuts: [["Ctrl+Space", "Quick Capture"]]
+  },
+  boards: {
+    title: "Taskboards",
+    summary: "Kanban-style task management. Tasks flow from Backlog to This Week to Done. Each section gets its own board with full drag-and-drop.",
+    actions: [
+      "Drag tasks between columns to change status",
+      "Click a task title to open it in the side panel",
+      "Right-click a task for quick actions (schedule, archive, delete)",
+      "Add checklists, due dates, priorities, and reminders to any task",
+      "Link tasks to notes and trackers for full cross-referencing",
+    ],
+    shortcuts: [["Ctrl+Space", "Quick Capture"], ["Ctrl+K", "Search"]]
+  },
+  notes: {
+    title: "Notes",
+    summary: "A rich editor powered by Tiptap with nested sub-notes, tags, and deep linking. Notes are organised by section with a tree sidebar.",
+    actions: [
+      "Type / for slash commands (headings, callouts, tables, and more)",
+      "Insert date chips and task chips to cross-link your data",
+      "Use tags to filter notes within a section",
+      "Create sub-notes for hierarchical organisation",
+      "Right-click a note in the sidebar to rename, duplicate, or delete",
+      "Customise the toolbar with the gear icon",
+    ],
+    shortcuts: [["Ctrl+B", "Bold"], ["Ctrl+I", "Italic"], ["Ctrl+U", "Underline"], ["Ctrl+Z", "Undo"], ["Ctrl+Shift+Z", "Redo"]]
+  },
+  trackers: {
+    title: "Trackers",
+    summary: "Track daily habits and tally occurrences. See streaks, weekly grids, and a monthly calendar. Trackers can link to tasks and notes.",
+    actions: [
+      "Click a day cell to toggle completion (habits) or increment (tallies)",
+      "Right-click a tally cell to decrement",
+      "View archived trackers with the toggle at the top",
+      "Link trackers to related tasks and notes from the detail panel",
+    ],
+    shortcuts: []
+  },
+  monthly: {
+    title: "Calendar & Log",
+    summary: "Two views in one tab. Calendar shows tasks by due date on a monthly grid. Log is a chronological record of completed tasks.",
+    actions: [
+      "Click a date in the calendar to navigate to that day\u2019s timetable",
+      "Coloured dots show which sections have tasks due",
+      "Switch between Calendar and Log with the tab toggle",
+      "The Log view groups completions by month",
+    ],
+    shortcuts: []
+  },
+  stats: {
+    title: "Statistics",
+    summary: "Data overview and productivity insights. See total counts, per-section breakdowns, tracker consistency rates, and creation timelines.",
+    actions: [
+      "Review task completion rates by section",
+      "Check tracker consistency with weekly progress bars",
+      "See your data footprint in the overview card",
+    ],
+    shortcuts: []
+  }
+};
+
+function HelpPanel(props) {
+  var info = VIEW_HELP[props.viewKey];
+  if (!info) return null;
+  return (
+    <Overlay onClose={props.onClose} width={400}>
+      <h2 style={{fontFamily:'"Playfair Display",serif',fontSize:20,fontWeight:700,marginBottom:6,color:"#1C1714"}}>{info.title}</h2>
+      <p style={{fontSize:13,color:"#4A3F30",lineHeight:1.6,marginBottom:16}}>{info.summary}</p>
+      {info.actions.length > 0 && (
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#9B8E80",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>What you can do</div>
+          {info.actions.map(function(a, i) {
+            return <div key={i} style={{fontSize:12,color:"#4A3F30",padding:"3px 0",display:"flex",alignItems:"flex-start",gap:8,lineHeight:1.45}}>
+              <span style={{color:"#C8A86B",fontWeight:700,flexShrink:0}}>{"\u2022"}</span><span>{a}</span>
+            </div>;
+          })}
+        </div>
+      )}
+      {info.shortcuts && info.shortcuts.length > 0 && (
+        <div>
+          <div style={{fontSize:10,fontWeight:700,color:"#9B8E80",letterSpacing:"0.5px",textTransform:"uppercase",marginBottom:8}}>Keyboard shortcuts</div>
+          {info.shortcuts.map(function(s, i) {
+            return <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"3px 0"}}>
+              <kbd style={{fontSize:11,fontWeight:600,background:"#EBE4D8",border:"1px solid #D6CEC3",borderRadius:4,padding:"2px 7px",color:"#4A3F30",fontFamily:'"DM Sans",sans-serif'}}>{s[0]}</kbd>
+              <span style={{fontSize:12,color:"#6B5E4E"}}>{s[1]}</span>
+            </div>;
+          })}
+        </div>
+      )}
+    </Overlay>
   );
 }
 

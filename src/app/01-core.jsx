@@ -334,6 +334,321 @@ function buildSeedData() {
   return { tasks:tasks, notes:notes, trackers:trackers, tt:tt };
 }
 
+function buildShowcaseData() {
+  var now = new Date().toISOString();
+  var today = todayISO();
+  var thisWeekMon = mondayOf(new Date());
+  var yesterday = addDays(today, -1);
+  var twoDaysAgo = addDays(today, -2);
+  var threeDaysAgo = addDays(today, -3);
+  var tomorrow = addDays(today, 1);
+  var dayAfterTmrw = addDays(today, 2);
+  var in3days = addDays(today, 3);
+  var nextWeekMon = addDays(thisWeekMon, 7);
+  var lastWeekMon = addDays(thisWeekMon, -7);
+  var monthKey = today.slice(0, 7);
+
+  var sections = DEFAULT_SECTIONS.map(function(s) { return Object.assign({}, s); });
+
+  // ── IDs — tasks
+  var tW1 = uid(), tW2 = uid(), tW3 = uid(), tW4 = uid(), tW5 = uid(), tW6 = uid();
+  var tP1 = uid(), tP2 = uid(), tP3 = uid(), tP4 = uid();
+  var tH1 = uid(), tH2 = uid(), tH3 = uid(), tH4 = uid();
+  var tL1 = uid(), tL2 = uid(), tL3 = uid(), tL4 = uid();
+  // ── IDs — notes
+  var nW1 = uid(), nW2 = uid(), nW3 = uid();
+  var nL1 = uid(), nL2 = uid(), nL3 = uid();
+  var nP1 = uid();
+  var nH1 = uid();
+  // ── IDs — trackers
+  var trH1 = uid(), trL1 = uid(), trH2 = uid(), trP1 = uid(), trC1 = uid(), trL2 = uid();
+
+  // ── Tasks
+  var tasks = [
+    // Work
+    { id:tW1, sectionId:"work", title:"Prepare Q2 report", notes:"Compile data from all departments. Sync with finance before Friday.",
+      type:"task", status:"doing", order:0, priority:"high",
+      checklist:[{id:uid(),text:"Collect sales figures",done:true},{id:uid(),text:"Get marketing metrics",done:true},{id:uid(),text:"Draft executive summary",done:false},{id:uid(),text:"Final review with manager",done:false}],
+      linkedNoteIds:[nW1], linkedTrackerIds:[], dueDate:tomorrow, dueTime:"14:00", allDay:false,
+      remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tW2, sectionId:"work", title:"Client presentation slides", notes:"Use the new brand template. Include case studies.",
+      type:"task", status:"doing", order:1, priority:"normal",
+      checklist:[{id:uid(),text:"Outline key points",done:true},{id:uid(),text:"Design slide deck",done:false},{id:uid(),text:"Add speaker notes",done:false}],
+      linkedNoteIds:[], linkedTrackerIds:[], dueDate:dayAfterTmrw, dueTime:null, allDay:true,
+      remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tW3, sectionId:"work", title:"Review pull requests", notes:"Focus on the auth refactor branch.",
+      type:"task", status:"backlog", order:2, priority:"normal", checklist:[], linkedNoteIds:[], linkedTrackerIds:[],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tW4, sectionId:"work", title:"Update project documentation", notes:"",
+      type:"task", status:"done", order:3, priority:"normal", checklist:[], linkedNoteIds:[nW2], linkedTrackerIds:[],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false,
+      createdAt:new Date(new Date(yesterday + "T12:00:00").getTime() - 86400000).toISOString(),
+      completedAt:new Date(yesterday + "T16:30:00").toISOString(), monthCompleted:monthKey },
+    { id:tW5, sectionId:"work", title:"Schedule team standup", notes:"",
+      type:"task", status:"done", order:4, priority:"normal", checklist:[], linkedNoteIds:[], linkedTrackerIds:[],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false,
+      createdAt:new Date(new Date(twoDaysAgo + "T12:00:00").getTime() - 86400000).toISOString(),
+      completedAt:new Date(twoDaysAgo + "T10:00:00").toISOString(), monthCompleted:monthKey },
+    { id:tW6, sectionId:"work", title:"Refactor authentication module", notes:"Move to JWT-based flow. Low priority until Q3.",
+      type:"task", status:"backlog", order:5, priority:"low", checklist:[], linkedNoteIds:[nW3], linkedTrackerIds:[],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+
+    // Personal
+    { id:tP1, sectionId:"personal", title:"Grocery shopping", notes:"",
+      type:"task", status:"doing", order:0, priority:"normal",
+      checklist:[{id:uid(),text:"Eggs and milk",done:false},{id:uid(),text:"Chicken breast",done:false},{id:uid(),text:"Vegetables",done:false},{id:uid(),text:"Olive oil",done:false}],
+      linkedNoteIds:[], linkedTrackerIds:[], dueDate:today, dueTime:null, allDay:true,
+      remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tP2, sectionId:"personal", title:"Call dentist for appointment", notes:"Ask about evening slots.",
+      type:"task", status:"backlog", order:1, priority:"normal", checklist:[], linkedNoteIds:[], linkedTrackerIds:[],
+      dueDate:addDays(nextWeekMon, 2), dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tP3, sectionId:"personal", title:"Organize photo albums", notes:"Sort by year, back up to external drive.",
+      type:"task", status:"backlog", order:2, priority:"low", checklist:[], linkedNoteIds:[], linkedTrackerIds:[],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tP4, sectionId:"personal", title:"Plan weekend trip", notes:"Check cabin availability near the lake.",
+      type:"task", status:"doing", order:3, priority:"normal", checklist:[], linkedNoteIds:[nP1], linkedTrackerIds:[],
+      dueDate:in3days, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+
+    // Health
+    { id:tH1, sectionId:"health", title:"Register for 5K run", notes:"Early-bird registration closes soon.",
+      type:"task", status:"doing", order:0, priority:"high", checklist:[], linkedNoteIds:[], linkedTrackerIds:[trH1],
+      dueDate:in3days, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tH2, sectionId:"health", title:"Meal prep Sunday", notes:"",
+      type:"task", status:"backlog", order:1, priority:"normal",
+      checklist:[{id:uid(),text:"Plan meals",done:false},{id:uid(),text:"Buy ingredients",done:false},{id:uid(),text:"Cook and portion",done:false}],
+      linkedNoteIds:[], linkedTrackerIds:[], dueDate:null, dueTime:null, allDay:true,
+      remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tH3, sectionId:"health", title:"Book annual checkup", notes:"",
+      type:"task", status:"done", order:2, priority:"normal", checklist:[], linkedNoteIds:[], linkedTrackerIds:[],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false,
+      createdAt:new Date(new Date(threeDaysAgo + "T12:00:00").getTime() - 86400000).toISOString(),
+      completedAt:new Date(threeDaysAgo + "T11:00:00").toISOString(), monthCompleted:monthKey },
+    { id:tH4, sectionId:"health", title:"Research yoga classes", notes:"Look for beginner-friendly studios nearby.",
+      type:"task", status:"backlog", order:3, priority:"normal", checklist:[], linkedNoteIds:[nH1], linkedTrackerIds:[],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+
+    // Learning
+    { id:tL1, sectionId:"learning", title:"Complete React course module 5", notes:"Covers hooks and context API.",
+      type:"task", status:"doing", order:0, priority:"normal",
+      checklist:[{id:uid(),text:"Watch lectures",done:true},{id:uid(),text:"Complete exercises",done:false},{id:uid(),text:"Submit quiz",done:false}],
+      linkedNoteIds:[nL3], linkedTrackerIds:[], dueDate:dayAfterTmrw, dueTime:null, allDay:true,
+      remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tL2, sectionId:"learning", title:"Read chapter 8 of Design Patterns", notes:"Observer and Strategy patterns.",
+      type:"task", status:"doing", order:1, priority:"normal", checklist:[], linkedNoteIds:[nL2], linkedTrackerIds:[trL1],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tL3, sectionId:"learning", title:"Write blog post draft", notes:"Topic: lessons learned from the refactor project.",
+      type:"task", status:"backlog", order:2, priority:"high", checklist:[], linkedNoteIds:[], linkedTrackerIds:[],
+      dueDate:addDays(nextWeekMon, 4), dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false, createdAt:now, completedAt:null, monthCompleted:null },
+    { id:tL4, sectionId:"learning", title:"Practice typing speed", notes:"",
+      type:"task", status:"done", order:3, priority:"normal", checklist:[], linkedNoteIds:[], linkedTrackerIds:[],
+      dueDate:null, dueTime:null, allDay:true, remindAt:null, remindFired:false, archived:false,
+      createdAt:new Date(new Date(twoDaysAgo + "T12:00:00").getTime() - 86400000).toISOString(),
+      completedAt:new Date(twoDaysAgo + "T15:00:00").toISOString(), monthCompleted:monthKey },
+  ];
+
+  // ── Notes
+  var dateLabel = new Date(yesterday + "T12:00:00").toLocaleDateString("en-GB", {day:"numeric", month:"short", year:"numeric"});
+  var notes = {
+    work: [
+      { id:nW1, parentId:null, title:"Weekly Standup Notes", order:0, createdAt:now, tags:["meeting","sprint"],
+        linkedTaskIds:[tW1, tW2], linkedTrackerIds:[], remindAt:null, remindFired:false,
+        content:"<h2>Sprint Review \u2014 Week 14</h2>" +
+          "<p>Meeting held on <span class=\"note-date-chip\" data-date=\"" + yesterday + "\" contenteditable=\"false\">\uD83D\uDCC5 " + dateLabel + "</span></p>" +
+          "<p>Action item: <span class=\"note-task-chip\" data-task-id=\"" + tW1 + "\" data-snapshot=\"Prepare Q2 report\" contenteditable=\"false\">\uD83D\uDCCC Prepare Q2 report</span></p>" +
+          "<div class=\"note-callout\">Key takeaway: Focus on reducing response times before the quarterly review.</div>" +
+          "<ul><li>Reviewed sprint velocity</li><li>Discussed blockers</li><li>Assigned action items</li></ul>" },
+      { id:nW2, parentId:null, title:"Project Roadmap", order:1, createdAt:now, tags:["project","roadmap"],
+        linkedTaskIds:[tW4], linkedTrackerIds:[], remindAt:null, remindFired:false,
+        content:"<h2>Project Roadmap 2026</h2>" +
+          "<div class=\"note-collapse\" data-open=\"true\"><div class=\"note-collapse-head\">Phase 1: Foundation</div><div class=\"note-collapse-body\"><p>Set up infrastructure, define API contracts, build authentication flow.</p></div></div>" +
+          "<div class=\"note-collapse\" data-open=\"false\"><div class=\"note-collapse-head\">Phase 2: Core Features</div><div class=\"note-collapse-body\"><p>Implement dashboards, reporting, and notification system.</p></div></div>" },
+      { id:nW3, parentId:null, title:"API Reference", order:2, createdAt:now, tags:["reference","api"],
+        linkedTaskIds:[tW6], linkedTrackerIds:[], remindAt:null, remindFired:false,
+        content:"<h2>API Reference</h2>" +
+          "<table><thead><tr><th>Endpoint</th><th>Method</th><th>Description</th></tr></thead>" +
+          "<tbody><tr><td>/api/users</td><td>GET</td><td>List all users</td></tr>" +
+          "<tr><td>/api/users/:id</td><td>POST</td><td>Update user</td></tr>" +
+          "<tr><td>/api/reports</td><td>GET</td><td>Generate report</td></tr></tbody></table>" },
+    ],
+    learning: [
+      { id:nL1, parentId:null, title:"Reading List", order:0, createdAt:now, tags:["books"],
+        linkedTaskIds:[tL2], linkedTrackerIds:[trL1], remindAt:null, remindFired:false,
+        content:"<h2>Reading List</h2><ol><li>Design Patterns \u2014 Gang of Four</li><li>Clean Code \u2014 Robert C. Martin</li><li>The Pragmatic Programmer \u2014 Hunt & Thomas</li><li>Refactoring \u2014 Martin Fowler</li></ol>" },
+      { id:nL2, parentId:nL1, title:"Design Patterns Notes", order:0, createdAt:now, tags:["books","patterns"],
+        linkedTaskIds:[tL2], linkedTrackerIds:[], remindAt:null, remindFired:false,
+        content:"<h2>Design Patterns Notes</h2><p>The <mark>Observer pattern</mark> defines a one-to-many dependency between objects so that when one changes state, all dependents are notified.</p>" +
+          "<p>The <mark>Strategy pattern</mark> defines a family of algorithms and makes them interchangeable.</p>" },
+      { id:nL3, parentId:null, title:"Course Progress", order:1, createdAt:now, tags:["course","react"],
+        linkedTaskIds:[tL1], linkedTrackerIds:[], remindAt:null, remindFired:false,
+        content:"<h2>React Course Progress</h2>" +
+          "<ul data-type=\"taskList\">" +
+          "<li data-type=\"taskItem\" data-checked=\"true\"><label><input type=\"checkbox\" checked=\"checked\"><span></span></label><div><p>Module 1: Introduction</p></div></li>" +
+          "<li data-type=\"taskItem\" data-checked=\"true\"><label><input type=\"checkbox\" checked=\"checked\"><span></span></label><div><p>Module 2: Components</p></div></li>" +
+          "<li data-type=\"taskItem\" data-checked=\"true\"><label><input type=\"checkbox\" checked=\"checked\"><span></span></label><div><p>Module 3: State Management</p></div></li>" +
+          "<li data-type=\"taskItem\" data-checked=\"true\"><label><input type=\"checkbox\" checked=\"checked\"><span></span></label><div><p>Module 4: Routing</p></div></li>" +
+          "<li data-type=\"taskItem\" data-checked=\"false\"><label><input type=\"checkbox\"><span></span></label><div><p>Module 5: Hooks & Context</p></div></li></ul>" },
+    ],
+    personal: [
+      { id:nP1, parentId:null, title:"Trip Planning", order:0, createdAt:now, tags:["travel"],
+        linkedTaskIds:[tP4], linkedTrackerIds:[], remindAt:null, remindFired:false,
+        content:"<h2>Weekend Trip Planning</h2>" +
+          "<div class=\"note-callout\">Book the cabin before Thursday \u2014 limited availability!</div>" +
+          "<ul><li>Check weather forecast</li><li>Pack hiking gear</li><li>Prepare snacks and drinks</li><li>Charge camera batteries</li></ul>" },
+    ],
+    health: [
+      { id:nH1, parentId:null, title:"Workout Log", order:0, createdAt:now, tags:["fitness"],
+        linkedTaskIds:[tH4], linkedTrackerIds:[trH1], remindAt:null, remindFired:false,
+        content:"<h2>Workout Log</h2>" +
+          "<table><thead><tr><th>Date</th><th>Activity</th><th>Duration</th></tr></thead>" +
+          "<tbody><tr><td>" + threeDaysAgo + "</td><td>Morning run</td><td>30 min</td></tr>" +
+          "<tr><td>" + twoDaysAgo + "</td><td>Yoga</td><td>45 min</td></tr>" +
+          "<tr><td>" + yesterday + "</td><td>Morning run</td><td>35 min</td></tr></tbody></table>" },
+    ],
+  };
+
+  // ── Trackers with 28 days of historical completions
+  var trackerDefs = [
+    { id:trH1, title:"Morning Run",    sectionId:"health",   color:"#1A7A43", mode:"habit",  activeDays:[1,1,1,1,1,0,0], linkedTaskIds:[tH1], linkedNoteIds:[nH1], order:0 },
+    { id:trL1, title:"Read 30 Minutes",sectionId:"learning", color:"#4B3FC7", mode:"habit",  activeDays:[1,1,1,1,1,1,1], linkedTaskIds:[tL2], linkedNoteIds:[nL1], order:1 },
+    { id:trH2, title:"Drink Water",    sectionId:"health",   color:"#0C7B7B", mode:"tally",  activeDays:[1,1,1,1,1,1,1], linkedTaskIds:[],    linkedNoteIds:[],    order:2 },
+    { id:trP1, title:"Meditate",       sectionId:"personal", color:"#8B6A30", mode:"habit",  activeDays:[1,1,1,1,1,1,1], linkedTaskIds:[],    linkedNoteIds:[],    order:3 },
+    { id:trC1, title:"Coffees",        sectionId:null,       color:"#8B5E3C", mode:"tally",  activeDays:[1,1,1,1,1,1,1], linkedTaskIds:[],    linkedNoteIds:[],    order:4 },
+    { id:trL2, title:"Code Practice",  sectionId:"learning", color:"#C43A3A", mode:"habit",  activeDays:[1,1,1,1,1,0,0], linkedTaskIds:[],    linkedNoteIds:[],    order:5 },
+  ];
+
+  var trackers = trackerDefs.map(function(def, tIdx) {
+    var completions = {};
+    for (var dayOff = 0; dayOff < 28; dayOff++) {
+      var dStr = addDays(today, -(27 - dayOff));
+      var di = dayIndex(dStr);
+      if (!def.activeDays[di]) continue;
+      if (def.mode === "habit") {
+        if ((dayOff * 7 + tIdx) % 10 < 7) completions[dStr] = true;
+      } else if (def.title === "Drink Water") {
+        completions[dStr] = 2 + (dayOff % 4);
+      } else {
+        completions[dStr] = 1 + (dayOff % 3);
+      }
+    }
+    return { id:def.id, title:def.title, sectionId:def.sectionId, color:def.color, mode:def.mode,
+      activeDays:def.activeDays, completions:completions, linkedTaskIds:def.linkedTaskIds,
+      linkedNoteIds:def.linkedNoteIds, order:def.order, archived:false, createdAt:now };
+  });
+
+  // ── Timetable — current week + last week
+  var tt = {};
+  var weekDays = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+
+  var makeBlock = function(typ, sec, lbl, s, e, links) {
+    return { id:uid(), type:typ, sectionId:sec, label:lbl, start:s, end:e, linkedItems:links || [] };
+  };
+
+  // Current week
+  tt[thisWeekMon] = {};
+  tt[thisWeekMon]["Monday"] = [
+    makeBlock("section","work","Morning Focus","09:00","11:00",[{type:"task",id:tW1,snapshot:"Prepare Q2 report"}]),
+    makeBlock("section","work","Team Standup","11:15","11:45",[{type:"note",id:nW1,snapshot:"Weekly Standup Notes"}]),
+    makeBlock("break",null,"Lunch","12:00","13:00"),
+    makeBlock("section","work","Client Work","14:00","16:00",[{type:"task",id:tW2,snapshot:"Client presentation slides"}]),
+    makeBlock("section","health","Exercise","17:00","18:00",[{type:"tracker",id:trH1,snapshot:"Morning Run"}]),
+  ];
+  tt[thisWeekMon]["Tuesday"] = [
+    makeBlock("section","work","Deep Work","09:00","11:30"),
+    makeBlock("break",null,"Lunch","12:00","13:00"),
+    makeBlock("section","learning","Learning Block","14:00","15:30",[{type:"task",id:tL1,snapshot:"Complete React course module 5"}]),
+    makeBlock("section","work","Admin Tasks","16:00","17:00"),
+  ];
+  tt[thisWeekMon]["Wednesday"] = [
+    makeBlock("section","work","Sprint Planning","09:00","10:00"),
+    makeBlock("section","work","Code Review","10:15","12:00",[{type:"task",id:tW3,snapshot:"Review pull requests"}]),
+    makeBlock("break",null,"Lunch","12:00","13:00"),
+    makeBlock("section","personal","Errands","14:00","15:00",[{type:"task",id:tP1,snapshot:"Grocery shopping"}]),
+    makeBlock("section","health","Yoga","17:30","18:30"),
+  ];
+  tt[thisWeekMon]["Thursday"] = [
+    makeBlock("section","work","Morning Focus","09:00","11:00",[{type:"task",id:tW1,snapshot:"Prepare Q2 report"},{type:"note",id:nW2,snapshot:"Project Roadmap"}]),
+    makeBlock("break",null,"Lunch","12:00","13:00"),
+    makeBlock("section","learning","Reading Time","14:00","15:00",[{type:"task",id:tL2,snapshot:"Read chapter 8 of Design Patterns"}]),
+    makeBlock("section","work","Meetings","15:30","17:00"),
+  ];
+  tt[thisWeekMon]["Friday"] = [
+    makeBlock("section","work","Weekly Review","09:00","10:00"),
+    makeBlock("section","work","Documentation","10:15","12:00",[{type:"note",id:nW3,snapshot:"API Reference"}]),
+    makeBlock("break",null,"Lunch","12:00","13:00"),
+    makeBlock("section","learning","Blog Writing","14:00","15:30",[{type:"task",id:tL3,snapshot:"Write blog post draft"}]),
+  ];
+
+  // Last week (lighter, for historical data)
+  tt[lastWeekMon] = {};
+  tt[lastWeekMon]["Monday"] = [
+    makeBlock("section","work","Morning Focus","09:00","11:00"),
+    makeBlock("break",null,"Lunch","12:00","13:00"),
+    makeBlock("section","work","Afternoon Work","14:00","16:30"),
+    makeBlock("section","health","Run","17:00","18:00"),
+  ];
+  tt[lastWeekMon]["Tuesday"] = [
+    makeBlock("section","work","Deep Work","09:00","11:30"),
+    makeBlock("break",null,"Lunch","12:00","13:00"),
+    makeBlock("section","learning","Study Session","14:00","16:00"),
+  ];
+  tt[lastWeekMon]["Wednesday"] = [
+    makeBlock("section","work","Meetings","09:00","11:00"),
+    makeBlock("break",null,"Lunch","12:00","13:00"),
+    makeBlock("section","work","Code Review","14:00","16:00"),
+    makeBlock("section","health","Exercise","17:00","18:00"),
+  ];
+  tt[lastWeekMon]["Thursday"] = [
+    makeBlock("section","work","Project Work","09:00","12:00"),
+    makeBlock("break",null,"Lunch","12:00","13:00"),
+    makeBlock("section","learning","Reading","14:00","15:30"),
+  ];
+  tt[lastWeekMon]["Friday"] = [
+    makeBlock("section","work","Weekly Review","09:00","10:30"),
+    makeBlock("break",null,"Lunch","12:00","13:00"),
+    makeBlock("section","work","Wrap-up","14:00","16:00"),
+  ];
+
+  // ── Template
+  var template = {
+    id:uid(), name:"Standard Work Week", color:"#0C7B7B",
+    blocks:{
+      Monday:[
+        {id:uid(),type:"section",sectionId:"work",label:"Morning Focus",start:"09:00",end:"11:00",linkedItems:[]},
+        {id:uid(),type:"break",sectionId:null,label:"Lunch",start:"12:00",end:"13:00",linkedItems:[]},
+        {id:uid(),type:"section",sectionId:"work",label:"Afternoon Work",start:"14:00",end:"16:30",linkedItems:[]},
+        {id:uid(),type:"section",sectionId:"health",label:"Exercise",start:"17:00",end:"18:00",linkedItems:[]},
+      ],
+      Tuesday:[
+        {id:uid(),type:"section",sectionId:"work",label:"Deep Work",start:"09:00",end:"11:30",linkedItems:[]},
+        {id:uid(),type:"break",sectionId:null,label:"Lunch",start:"12:00",end:"13:00",linkedItems:[]},
+        {id:uid(),type:"section",sectionId:"learning",label:"Learning Block",start:"14:00",end:"15:30",linkedItems:[]},
+        {id:uid(),type:"section",sectionId:"work",label:"Admin",start:"16:00",end:"17:00",linkedItems:[]},
+      ],
+      Wednesday:[
+        {id:uid(),type:"section",sectionId:"work",label:"Sprint Planning",start:"09:00",end:"10:00",linkedItems:[]},
+        {id:uid(),type:"section",sectionId:"work",label:"Code Review",start:"10:15",end:"12:00",linkedItems:[]},
+        {id:uid(),type:"break",sectionId:null,label:"Lunch",start:"12:00",end:"13:00",linkedItems:[]},
+        {id:uid(),type:"section",sectionId:"work",label:"Project Work",start:"14:00",end:"16:30",linkedItems:[]},
+      ],
+      Thursday:[
+        {id:uid(),type:"section",sectionId:"work",label:"Morning Focus",start:"09:00",end:"11:00",linkedItems:[]},
+        {id:uid(),type:"break",sectionId:null,label:"Lunch",start:"12:00",end:"13:00",linkedItems:[]},
+        {id:uid(),type:"section",sectionId:"learning",label:"Reading Time",start:"14:00",end:"15:00",linkedItems:[]},
+        {id:uid(),type:"section",sectionId:"work",label:"Meetings",start:"15:30",end:"17:00",linkedItems:[]},
+      ],
+      Friday:[
+        {id:uid(),type:"section",sectionId:"work",label:"Weekly Review",start:"09:00",end:"10:00",linkedItems:[]},
+        {id:uid(),type:"section",sectionId:"work",label:"Documentation",start:"10:15",end:"12:00",linkedItems:[]},
+        {id:uid(),type:"break",sectionId:null,label:"Lunch",start:"12:00",end:"13:00",linkedItems:[]},
+      ],
+      Saturday:[],
+      Sunday:[],
+    },
+  };
+
+  return { sections:sections, tasks:tasks, notes:notes, trackers:trackers, tt:tt, templates:[template] };
+}
+
 // ─── Storage ──────────────────────────────────────────────────────────────────
 
 async function sget(k) {
