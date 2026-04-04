@@ -2287,7 +2287,7 @@ function StatsView({tasks,tt,week,sections,byId,notes,trackers}) {
 
 // ─── Settings Modal ───────────────────────────────────────────────────────────
 
-function SettingsModal({sections,setSections,onClose,checkForUpdate,tasks,setTasks,notes,setNotes,tt,setTt,trackers,setTrackers}) {
+function SettingsModal({sections,setSections,onClose,checkForUpdate,tasks,setTasks,notes,setNotes,tt,setTt,trackers,setTrackers,onRestartTour}) {
   const [tab,        setTab]      = useState("sections");
   const [local,      setLocal]    = useState(sections.map(s=>({...s})));
   const [newLabel,   setNewLabel] = useState("");
@@ -2508,6 +2508,37 @@ function SettingsModal({sections,setSections,onClose,checkForUpdate,tasks,setTas
                   onClose();
                 } catch(e) { console.error("Seed data error:", e); }
               }} style={{...S.btnGhost,fontSize:11,padding:"5px 14px",flexShrink:0}}>Load Demo</button>
+            </div>
+          </div>
+
+          <div style={{background:"#F3EDE3",borderRadius:9,border:"1px solid #E3D9CC",padding:"12px 14px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:"#1C1714"}}>Showcase Data</div>
+                <div style={{fontSize:11,color:"#6B5E4E",marginTop:2}}>Load a rich, realistic workspace with filled-out tasks, notes, trackers, and a full timetable.</div>
+              </div>
+              <button onClick={function(){
+                try {
+                  var showcase = buildShowcaseData();
+                  setSections(showcase.sections);
+                  setTasks(showcase.tasks);
+                  setNotes(showcase.notes);
+                  setTrackers(showcase.trackers);
+                  setTt(showcase.tt);
+                  onClose();
+                } catch(e) { console.error("Showcase data error:", e); }
+              }} style={{...S.btnGhost,fontSize:11,padding:"5px 14px",flexShrink:0}}>Load Showcase</button>
+            </div>
+          </div>
+
+          <div style={{background:"#F3EDE3",borderRadius:9,border:"1px solid #E3D9CC",padding:"12px 14px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:"#1C1714"}}>Guided Tour</div>
+                <div style={{fontSize:11,color:"#6B5E4E",marginTop:2}}>Restart the onboarding walkthrough with showcase data. Replaces current data.</div>
+              </div>
+              <button onClick={function(){if(onRestartTour) onRestartTour();}}
+                style={{...S.btnGhost,fontSize:11,padding:"5px 14px",flexShrink:0}}>Restart Tour</button>
             </div>
           </div>
 

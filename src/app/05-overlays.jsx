@@ -626,3 +626,155 @@ function NoteFloatOverlay({noteId,notes,onClose,onOpenNote}) {
     </div>
   );
 }
+
+// ─── Welcome Overlay (first launch) ──────────────────────────────────────────
+
+function WelcomeOverlay(props) {
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(28,23,20,0.82)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:600,padding:20}}>
+      <div style={{background:"#FDFAF6",borderRadius:18,padding:"44px 40px",maxWidth:460,width:"100%",textAlign:"center",
+        boxShadow:"0 32px 80px rgba(0,0,0,0.45)",border:"1px solid #E3D9CC"}}>
+        <div style={{fontFamily:'"Playfair Display",serif',fontSize:28,fontWeight:700,color:"#1C1714",lineHeight:1.2,marginBottom:6}}>
+          Welcome to Progress{" "}<em style={{fontStyle:"italic",color:"#C8A86B"}}>You</em>
+        </div>
+        <p style={{fontSize:13,color:"#6B5E4E",lineHeight:1.6,marginBottom:28}}>
+          A personal notebook system for timetabling, task management, notes, and habit tracking — all interconnected, all offline, all yours.
+        </p>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <button onClick={props.onTour} style={{padding:"13px 24px",borderRadius:10,border:"none",background:"#1C1714",color:"#F8F3EC",
+            fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.2)",transition:"transform 0.1s"}}>
+            Take the Tour
+          </button>
+          <div style={{fontSize:11,color:"#9B8E80",margin:"2px 0"}}>Loads a showcase workspace and walks you through each feature</div>
+          <button onClick={props.onFresh} style={{padding:"10px 24px",borderRadius:10,border:"1.5px solid #D6CEC3",background:"transparent",color:"#4A3F30",
+            fontSize:13,fontWeight:600,cursor:"pointer"}}>
+            Start Fresh
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Walkthrough Overlay ─────────────────────────────────────────────────────
+
+var WALKTHROUGH_STEPS = [
+  { target:".nav-scroll", view:null, title:"Navigation", body:"Your views live here. Each tab is a different way to organise your day \u2014 schedule, tasks, notes, habits, and more.", position:"bottom" },
+  { target:null, view:"today", title:"Today", body:"Your daily command centre. See upcoming deadlines, today's schedule, and active trackers all in one place. Expand tasks with the + button to peek at details.", position:"center" },
+  { target:null, view:"timetable", title:"Timetable", body:"Plan your week with time blocks. Each block can link to tasks and notes, keeping your schedule and to-dos connected. Click an empty slot to add a block.", position:"center" },
+  { target:null, view:"boards", title:"Taskboards", body:"Kanban columns for each section. Drag tasks between Backlog, This Week, and Done. Click a task to open it in the side panel with full editing.", position:"center" },
+  { target:null, view:"notes", title:"Notes", body:"A rich editor with slash commands, callouts, collapsible sections, tables, and cross-links. Insert task chips and date chips to connect your notes to everything else.", position:"center" },
+  { target:null, view:"trackers", title:"Trackers", body:"Track daily habits (did you run today?) and tally occurrences (how many glasses of water?). See streaks, weekly grids, and a monthly calendar.", position:"center" },
+  { target:".cap-btn", view:null, title:"Quick Capture", body:"Press Ctrl+Space from anywhere to quickly add a task or note without leaving your current view. You can also set a reminder right from here.", position:"bottom" },
+  { target:"[title='Search (Ctrl+K)']", view:null, title:"Search", body:"Press Ctrl+K to search across all tasks, notes, timetable blocks, and trackers. Results are grouped by type with colour-coded badges.", position:"bottom" },
+  { target:"[title='Settings']", view:null, title:"Settings & Data", body:"Manage your sections, configure backups, import/export data, and customise the app. Your data is stored locally and is always yours.", position:"bottom" },
+];
+
+function WalkthroughOverlay(props) {
+  var step = props.step;
+  var onNext = props.onNext;
+  var onSkip = props.onSkip;
+  var onFinish = props.onFinish;
+  var setView = props.setView;
+  var view = props.view;
+  var totalSteps = WALKTHROUGH_STEPS.length + 1;
+  var isFinish = step >= WALKTHROUGH_STEPS.length;
+
+  var [tipPos, setTipPos] = useState(null);
+  var [targetRect, setTargetRect] = useState(null);
+
+  useEffect(function() {
+    if (isFinish) { setTipPos(null); setTargetRect(null); return; }
+    var s = WALKTHROUGH_STEPS[step];
+    if (s.view && s.view !== view) { setView(s.view); }
+    var tid = setTimeout(function() {
+      if (!s.target) { setTargetRect(null); setTipPos(null); return; }
+      var el = document.querySelector(s.target);
+      if (!el) { setTargetRect(null); setTipPos(null); return; }
+      var r = el.getBoundingClientRect();
+      setTargetRect({left:r.left, top:r.top, width:r.width, height:r.height});
+      var tipLeft = r.left + r.width / 2 - 170;
+      var tipTop = s.position === "bottom" ? r.bottom + 12 : r.top - 12;
+      if (tipLeft < 16) tipLeft = 16;
+      if (tipLeft + 340 > window.innerWidth) tipLeft = window.innerWidth - 356;
+      setTipPos({left:tipLeft, top:tipTop});
+    }, 80);
+    return function() { clearTimeout(tid); };
+  }, [step, view]);
+
+  // Finish screen
+  if (isFinish) {
+    return (
+      <div style={{position:"fixed",inset:0,background:"rgba(28,23,20,0.82)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:600,padding:20}}>
+        <div style={{background:"#FDFAF6",borderRadius:18,padding:"40px 36px",maxWidth:440,width:"100%",textAlign:"center",
+          boxShadow:"0 32px 80px rgba(0,0,0,0.45)",border:"1px solid #E3D9CC"}}>
+          <div style={{fontSize:32,marginBottom:12}}>{"\uD83C\uDF89"}</div>
+          <div style={{fontFamily:'"Playfair Display",serif',fontSize:22,fontWeight:700,color:"#1C1714",marginBottom:8}}>You're all set!</div>
+          <p style={{fontSize:13,color:"#6B5E4E",lineHeight:1.6,marginBottom:24}}>
+            Explore the demo workspace to see how everything connects, or clear it and start building your own.
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <button onClick={function(){onFinish(true);}} style={{padding:"12px 24px",borderRadius:10,border:"none",background:"#1C1714",color:"#F8F3EC",
+              fontSize:14,fontWeight:700,cursor:"pointer"}}>Keep Exploring</button>
+            <button onClick={function(){onFinish(false);}} style={{padding:"10px 24px",borderRadius:10,border:"1.5px solid #D6CEC3",background:"transparent",color:"#4A3F30",
+              fontSize:13,fontWeight:600,cursor:"pointer"}}>Clear &amp; Start Fresh</button>
+          </div>
+          <div style={{fontSize:11,color:"#C2B49E",marginTop:16}}>You can restart the tour anytime from Settings</div>
+        </div>
+      </div>
+    );
+  }
+
+  var currentStep = WALKTHROUGH_STEPS[step];
+  var isCenter = !targetRect;
+  var pad = 6;
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:600}}>
+      {/* Backdrop with cutout */}
+      {targetRect ? (
+        <div style={{position:"fixed",inset:0,background:"rgba(28,23,20,0.62)",
+          clipPath:"polygon(0 0,100% 0,100% 100%,0 100%," +
+            (targetRect.left-pad)+"px "+(targetRect.top+targetRect.height+pad)+"px," +
+            (targetRect.left-pad)+"px "+(targetRect.top-pad)+"px," +
+            (targetRect.left+targetRect.width+pad)+"px "+(targetRect.top-pad)+"px," +
+            (targetRect.left+targetRect.width+pad)+"px "+(targetRect.top+targetRect.height+pad)+"px," +
+            (targetRect.left-pad)+"px "+(targetRect.top+targetRect.height+pad)+"px," +
+            "0 100%)"}}/>
+      ) : (
+        <div style={{position:"fixed",inset:0,background:"rgba(28,23,20,0.62)"}}/>
+      )}
+
+      {/* Tooltip or centered card */}
+      {isCenter ? (
+        <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
+          background:"#FDFAF6",borderRadius:14,padding:"28px 32px",maxWidth:400,width:"90%",
+          boxShadow:"0 24px 64px rgba(0,0,0,0.35)",border:"1px solid #E3D9CC",zIndex:601}}>
+          <div style={{fontFamily:'"Playfair Display",serif',fontSize:18,fontWeight:700,color:"#1C1714",marginBottom:8}}>{currentStep.title}</div>
+          <p style={{fontSize:13,color:"#4A3F30",lineHeight:1.6,marginBottom:20}}>{currentStep.body}</p>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <span style={{fontSize:11,color:"#9B8E80"}}>{(step+1)+" of "+totalSteps}</span>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={onSkip} style={{padding:"6px 14px",borderRadius:7,border:"1px solid #D6CEC3",background:"transparent",color:"#9B8E80",fontSize:11,fontWeight:600,cursor:"pointer"}}>Skip Tour</button>
+              <button onClick={onNext} style={{padding:"6px 18px",borderRadius:7,border:"none",background:"#1C1714",color:"#F8F3EC",fontSize:11,fontWeight:700,cursor:"pointer"}}>Next</button>
+            </div>
+          </div>
+        </div>
+      ) : tipPos && (
+        <div style={{position:"fixed",left:tipPos.left,top:tipPos.top,width:340,
+          background:"#FDFAF6",borderRadius:12,padding:"20px 22px",
+          boxShadow:"0 16px 48px rgba(0,0,0,0.3)",border:"1.5px solid #C8A86B",zIndex:601}}>
+          <div style={{fontFamily:'"Playfair Display",serif',fontSize:16,fontWeight:700,color:"#1C1714",marginBottom:6}}>{currentStep.title}</div>
+          <p style={{fontSize:12,color:"#4A3F30",lineHeight:1.55,marginBottom:16}}>{currentStep.body}</p>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <span style={{fontSize:11,color:"#9B8E80"}}>{(step+1)+" of "+totalSteps}</span>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={onSkip} style={{padding:"5px 12px",borderRadius:7,border:"1px solid #D6CEC3",background:"transparent",color:"#9B8E80",fontSize:11,fontWeight:600,cursor:"pointer"}}>Skip</button>
+              <button onClick={onNext} style={{padding:"5px 16px",borderRadius:7,border:"none",background:"#1C1714",color:"#F8F3EC",fontSize:11,fontWeight:700,cursor:"pointer"}}>Next</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
