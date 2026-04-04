@@ -97,6 +97,7 @@ function App() {
   const [showSearch,   setShowSearch]   = useState(false);
   const [trackers,     setTrackers]     = useState([]);
   const [undoStack,    setUndoStack]    = useState([]);
+  var [showHelp, setShowHelp] = useState(false);
   const undoTimers = useRef({});
 
   useEffect(()=>{
@@ -726,6 +727,13 @@ function App() {
           onRemind={()=>setShowUpdate(false)}
         />
       )}
+      <button onClick={function(){setShowHelp(true);}} title="View help"
+        style={{position:"fixed",bottom:20,left:20,width:32,height:32,borderRadius:"50%",
+          background:"#EBE4D8",border:"1.5px solid #D6CEC3",color:"#6B5E4E",
+          fontSize:14,fontWeight:700,cursor:"pointer",zIndex:90,
+          display:"flex",alignItems:"center",justifyContent:"center",
+          boxShadow:"0 2px 8px rgba(0,0,0,0.1)"}}>?</button>
+      {showHelp && <HelpPanel viewKey={view} onClose={function(){setShowHelp(false);}}/>}
       {/* Toast banners (reminders + undo) */}
       <div style={{position:"fixed",bottom:20,right:20,zIndex:500,display:"flex",flexDirection:"column",gap:8,pointerEvents:"none"}}>
         {toasts.map(t=>(

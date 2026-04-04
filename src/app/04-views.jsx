@@ -90,7 +90,7 @@ function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onO
     <div key="schedule">
       <SectionHeader label="Schedule" sectionKey="schedule"/>
       {blocks.length===0 ? (
-        <Empty icon={"\uD83D\uDDD3"} text="No blocks scheduled today." sub="Head to the Timetable tab to plan your day."/>
+        <Empty icon={"\uD83D\uDDD3"} text="No blocks scheduled today." sub="Head to the Timetable tab to plan your day." actions={["Create time blocks in the Timetable tab", "Link tasks and notes to blocks for quick access", "Use Set Blocks to stamp recurring blocks"]}/>
       ) : (
         <div style={{display:"grid",gridTemplateColumns:"280px 1fr",gap:20,alignItems:"start"}}>
           <div style={{background:"#EBE4D8",borderRadius:14,padding:"16px",position:"sticky",top:88}}>
@@ -114,7 +114,7 @@ function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onO
             </div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            {todaySids.length===0&&<Empty icon={"\uD83D\uDCCB"} text="No task-linked sections today." sub="Add work blocks to your timetable to see tasks here."/>}
+            {todaySids.length===0&&<Empty icon={"\uD83D\uDCCB"} text="No task-linked sections today." sub="Add work blocks to your timetable to see tasks here." actions={["Add section blocks to your timetable", "Tasks from those sections appear here automatically"]}/>}
             {todaySids.map(sid=>{
               const sec=byId[sid]; if(!sec) return null;
               const active=tasks.filter(t=>t.sectionId===sid&&t.status!=="done"&&t.type!=="spacer");
@@ -1575,7 +1575,7 @@ function MonthlyView({tasks,sections,byId,initialMode="calendar"}) {
             <h2 style={{fontFamily:'"Playfair Display",serif',fontSize:26,fontWeight:700}}>{fmtMonth(logSel)}</h2>
             <span style={{fontSize:13,color:"#9B8E80"}}><strong style={{color:"#1C1714",fontSize:20}}>{done.length}</strong> tasks</span>
           </div>
-          {done.length===0&&<Empty icon={"\uD83D\uDCC5"} text="Nothing completed yet this month." sub="Mark tasks as done in Taskboards to see them here."/>}
+          {done.length===0&&<Empty icon={"\uD83D\uDCC5"} text="Nothing completed yet this month." sub="Mark tasks as done in Taskboards to see them here." actions={["Move tasks to the Done column in Taskboards", "Completed tasks are grouped by section and month"]}/>}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
             {Object.entries(bySec).map(([sid,ts])=>{
               const sec=byId[sid]||{label:sid,color:"#9B8E80"};
