@@ -1,72 +1,28 @@
-## v2.3.0 — Multi-File Architecture
+## v3.0.0 — Onboarding, Help System & Showcase
 
-**Modular source split**
-The single 5,200-line `index.html` has been split into 6 focused JSX modules under `src/app/`. The HTML shell (`index.html`, 81 lines) fetches and concatenates them at runtime before Babel compilation — no build step added. Each file has a clear responsibility:
+**First-launch experience**
+New installations now show a Welcome screen with two paths: **Take the Tour** loads a rich showcase workspace and walks you through every feature in an 11-step guided walkthrough, or **Start Fresh** to begin with a blank slate. The tour highlights the nav bar, each view, Quick Capture, Search, pin overlays, and Settings — with positioned tooltip bubbles and a backdrop cutout around each target element. Keyboard support: Enter/→ for Next, Escape to Skip.
 
-| File | Role |
-|------|------|
-| `01-core.jsx` | Helpers, constants, storage, migrations, styles |
-| `02-shared.jsx` | Reusable UI components (ColorPicker, TimePicker, Overlay, etc.) |
-| `03-modals.jsx` | All modal dialogs (Search, BlockModal, TaskEdit, Settings, etc.) |
-| `04-views.jsx` | All top-level views (Today, Timetable, Boards, Notes, Trackers, Stats) |
-| `05-overlays.jsx` | Side panels and overlays (NavOverlay, PinOverlay, TaskPanel, NotePanel) |
-| `06-app.jsx` | ErrorBoundary, App component, render call |
+**Showcase dataset**
+A full "week in the life" demo workspace purpose-built for screenshots and the tour: 20 tasks with real descriptions and checklists, 10 notes with Tiptap content (callouts, collapsibles, tables, task/date chips), 6 trackers with 4 weeks of historical data, a complete Mon–Sun timetable across 2 weeks, and cross-links everywhere. Available anytime via Settings → Load Showcase.
 
-This improves developer experience and makes LLM-assisted editing significantly more efficient — only the relevant 300–2,000 line file needs to be read instead of the full 5,000+ line monolith.
+**Per-view help cards**
+A `?` button in the bottom-left corner opens a help panel for whichever view you're on — summary, key actions, and keyboard shortcuts. Calendar and Log have separate help entries.
 
-**No functional changes** — the app behaves identically to v2.2.0.
+**Enriched empty states**
+Empty views now show bullet-point guidance instead of just a message, helping new users discover features at the point of need.
 
----
+**Timetable dates**
+Day columns now show the date (e.g. "Monday 7 Apr") and today's column is highlighted in gold.
 
-## v2.2.0 — Trackers, Search & Quality of Life
+**New note auto-select**
+Creating a note via + Note, + Child, context menu, or duplicate now immediately opens it in the editor.
 
-**Trackers — new top-level feature**
-A brand-new Trackers tab for tracking recurring habits and routines. Create trackers with custom active days (e.g. Mon–Fri), tick them off daily, and watch your streak grow. Each tracker has a weekly completion grid, monthly calendar view, and streak counter. Trackers are fully interconnected — pin tasks and notes to a tracker, link trackers to timetable blocks, and create new tasks or notes directly from a tracker's detail panel. Today's active trackers also appear on the Today dashboard and the Pin Overlay for quick access.
+**Data safety warnings**
+Load Demo, Load Showcase, and Restart Tour now show a red-titled confirmation overlay warning that existing data will be replaced, with a "Backup First" option.
 
-**Global search (Ctrl+K)**
-Search across tasks, notes, timetable blocks, and trackers from anywhere in the app. Results are grouped by type with color-coded badges. Supports regex patterns for power users. Archived items are excluded from results.
+**Section color picker scroll**
+The sections list in Settings now scrolls within a fixed container, keeping all color pickers accessible regardless of section count.
 
-**Undo toasts**
-Destructive actions (deleting or archiving tasks, notes, trackers) now show a 5-second undo toast at the bottom of the screen. Up to 5 actions are tracked in parallel.
-
-**Task archiving**
-Done tasks can be archived from the taskboard to keep boards clean. Archived tasks remain accessible through search, the Log view, and linked items.
-
-**Data overview in Stats**
-The Stats view now includes a data overview card showing total counts, creation dates, and per-section breakdowns for tasks, notes, and timetable data. A Tracker Consistency card shows weekly completion rates with progress bars.
-
-**Import/Export v7**
-Trackers are included in full data exports and imports. Export version bumped to 7.
-
-**TimePicker portal dropdown**
-The time picker dial now renders as a floating portal above all overlays, eliminating clipping and scroll issues when setting times in the Block editor.
-
-**Under the hood**
-- Migration functions use safe `...spread` then `?? default` ordering
-- Timetable data auto-prunes weeks older than 6 months (archived to `py-tt-archive`)
-- `uid()` uses `crypto.getRandomValues()` instead of `Math.random()`
-- Tasks and notes gain `linkedTrackerIds` field via migrations
-- Priority picker added to Add Task modal and tracker task creation
-- Pin Existing search dropdowns close on outside click
-
----
-
-## v2.0.2 — Offline & Data Safety
-
-**Offline-first loading**
-React, ReactDOM, and Babel are now bundled locally in `src/vendor/`. The app no longer requires an internet connection to launch. Fonts are also served from local woff2 files. A CDN fallback is retained for dev mode only.
-
-**Automatic backups**
-Your data is now backed up automatically (default: every 24 hours). Backups are stored alongside your data in `AppData/backups/`, with the 10 most recent sets retained. The interval is configurable in Settings → App (minimum 1 hour, maximum 7 days), and a manual "Backup Now" button is available.
-
-**Safe section removal**
-Deleting a section now shows a confirmation overlay with a count of affected tasks, notes, and timetable blocks. You can choose to migrate all items to another section or delete them permanently. The last remaining section cannot be removed.
-
-**Error boundary**
-If a component crashes, the app now shows a recovery screen with the error details and a Refresh button instead of a blank white screen. Your data is unaffected.
-
-**Debounced writes**
-Rapid state changes (e.g. dragging tasks between columns) are now coalesced into a single disk write per data key, reducing filesystem load.
-
-**Bugfix**
-Fixed an undefined `setAdding()` call in BoardsView that could crash the app when switching section tabs.
+**Note picker close-on-click-outside**
+The Pin a Note dropdown now closes when clicking anywhere outside it.
