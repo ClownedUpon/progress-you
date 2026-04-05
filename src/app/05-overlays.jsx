@@ -1,11 +1,98 @@
-function TrackerNavPanel({trackerId,trackers,byId,toggleTrackerDay}) {
-  const trk=(trackers||[]).find(t=>t.id===trackerId);
-  if(!trk) return <div style={{padding:24,color:"#9B8E80"}}>Tracker not found.</div>;
-  const today=todayISO();
-  const todayDi=dayIndex(today);
-  const done=trk.completions[today];
-  const streak=trackerStreak(trk);
-  const sec=byId[trk.sectionId];
+function TrackerNavPanel({trackerId,trackers,byId,toggleTrackerDay,setTrackerDay}) {
+  var trk=(trackers||[]).find(function(t){return t.id===trackerId;});
+  if(!trk) return React.createElement("div",{style:{padding:24,color:"#9B8E80"}},"Tracker not found.");
+  var today=todayISO();
+  var todayDi=dayIndex(today);
+  var val=trk.completions[today];
+  var streak=trackerStreak(trk);
+  var sec=byId[trk.sectionId];
+  var isActiveToday=trk.mode==="tally"||trk.mode==="measure"||trk.activeDays[todayDi];
+
+  var activeLabel=trk.mode==="tally"?"Always active (tally)"
+    :trk.mode==="measure"?"Always active (measure)"
+    :"Active: "+DAYS.filter(function(_,i){return trk.activeDays[i];}).map(function(d){return d.slice(0,3);}).join(", ");
+
+  // Type-aware today control
+  var todayControl=null;
+  if(trk.mode==="habit"&&isActiveToday){
+    var hDone=!!val;
+    todayControl=(
+      <div onClick={function(){toggleTrackerDay(trk.id,today);}}
+        style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:9,cursor:"pointer",marginBottom:16,
+          background:hDone?"#D4F0E0":"#F8F3EC",border:hDone?"1.5px solid #1A7A43":"1px solid #E3D9CC"}}>
+        <div style={{width:22,height:22,borderRadius:5,border:"2px solid "+trk.color,
+          background:hDone?trk.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",
+          color:"#fff",fontSize:13,fontWeight:700}}>{hDone?"\u2713":""}</div>
+        <span style={{fontSize:14,fontWeight:600}}>{hDone?"Completed today":"Mark as done today"}</span>
+      </div>
+    );
+  } else if(trk.mode==="tally"){
+    var tCount=typeof val==="number"?val:val?1:0;
+    todayControl=(
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderRadius:9,marginBottom:16,
+        background:tCount>0?trk.color+"12":"#F8F3EC",border:"1px solid "+(tCount>0?trk.color+"40":"#E3D9CC")}}>
+        <span style={{fontSize:14,fontWeight:600,flex:1}}>Today</span>
+        <button onClick={function(){toggleTrackerDay(trk.id,today,false);}} style={{width:24,height:24,borderRadius:5,border:"1.5px solid #D6CEC3",background:"#F8F3EC",fontSize:14,fontWeight:700,color:"#7A6C5E",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>&minus;</button>
+        <span style={{fontSize:18,fontWeight:700,color:trk.color,minWidth:28,textAlign:"center"}}>{tCount}</span>
+        <button onClick={function(){toggleTrackerDay(trk.id,today,true);}} style={{width:24,height:24,borderRadius:5,border:"1.5px solid "+trk.color,background:trk.color,fontSize:14,fontWeight:700,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+      </div>
+    );
+  } else if(trk.mode==="rating"&&isActiveToday){
+    var rc=trk.config||{min:1,max:5};
+    var rDots=[];
+    for(var rri=rc.min;rri<=rc.max;rri++) rDots.push(rri);
+    todayControl=(
+      <div style={{padding:"10px 14px",borderRadius:9,marginBottom:16,
+        background:typeof val==="number"?trk.color+"12":"#F8F3EC",border:"1px solid "+(typeof val==="number"?trk.color+"40":"#E3D9CC")}}>
+        <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>Today's Rating</div>
+        <div style={{display:"flex",alignItems:"center",gap:4}}>
+          {rDots.map(function(v){ return (
+            <div key={v} onClick={function(){setTrackerDay(trk.id,today,v);}}
+              style={{width:28,height:28,borderRadius:"50%",fontSize:12,fontWeight:700,
+                display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",
+                background:val===v?trk.color:"transparent",
+                color:val===v?"#fff":typeof val==="number"&&v<=val?trk.color:"#C2B49E",
+                border:"1.5px solid "+(val===v?trk.color:typeof val==="number"&&v<=val?trk.color+"60":"#D6CEC3")}}>
+              {v}
+            </div>
+          ); })}
+        </div>
+      </div>
+    );
+  } else if(trk.mode==="measure"){
+    todayControl=(
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderRadius:9,marginBottom:16,
+        background:typeof val==="number"?trk.color+"12":"#F8F3EC",border:"1px solid "+(typeof val==="number"?trk.color+"40":"#E3D9CC")}}>
+        <span style={{fontSize:14,fontWeight:600,flex:1}}>Today</span>
+        <input key={String(val)} defaultValue={typeof val==="number"?val:""}
+          onBlur={function(e){var v=parseFloat(e.target.value);if(!isNaN(v))setTrackerDay(trk.id,today,v);else if(!e.target.value.trim())setTrackerDay(trk.id,today,null);}}
+          onKeyDown={function(e){if(e.key==="Enter")e.target.blur();}}
+          placeholder={"\u2014"}
+          style={{width:64,padding:"4px 8px",borderRadius:6,border:"1.5px solid "+(typeof val==="number"?trk.color+"60":"#D6CEC3"),fontSize:14,textAlign:"center",background:"#fff",color:"#1C1714",fontWeight:600}}/>
+        <span style={{fontSize:12,color:"#9B8E80",fontWeight:600}}>{trk.config?.unit||""}</span>
+      </div>
+    );
+  } else if(trk.mode==="choice"&&isActiveToday){
+    var cOpts=(trk.config?.options)||[];
+    todayControl=(
+      <div style={{padding:"10px 14px",borderRadius:9,marginBottom:16,
+        background:typeof val==="string"?trk.color+"12":"#F8F3EC",border:"1px solid "+(typeof val==="string"?trk.color+"40":"#E3D9CC")}}>
+        <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>Today's Choice</div>
+        <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+          {cOpts.map(function(o){ return (
+            <div key={o.value} onClick={function(){setTrackerDay(trk.id,today,o.value);}}
+              style={{fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:14,cursor:"pointer",
+                background:val===o.value?(o.color||trk.color):(o.color||trk.color)+"15",
+                color:val===o.value?"#fff":(o.color||trk.color),
+                border:"1.5px solid "+(val===o.value?(o.color||trk.color):(o.color||trk.color)+"40")}}>
+              {o.value}
+            </div>
+          ); })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{padding:20}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
@@ -13,17 +100,8 @@ function TrackerNavPanel({trackerId,trackers,byId,toggleTrackerDay}) {
         <h3 style={{fontFamily:'"Playfair Display",serif',fontSize:18,margin:0}}>{trk.title}</h3>
         {sec&&<span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:4,background:sec.color+"20",color:sec.color}}>{sec.label}</span>}
       </div>
-      <div style={{fontSize:12,color:"#7A6C5E",marginBottom:12}}>Active: {DAYS.filter(function(_,i){return trk.activeDays[i];}).map(function(d){return d.slice(0,3);}).join(", ")}</div>
-      {trk.activeDays[todayDi]&&(
-        <div onClick={()=>toggleTrackerDay(trk.id,today)}
-          style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:9,cursor:"pointer",marginBottom:16,
-            background:done?"#D4F0E0":"#F8F3EC",border:done?"1.5px solid #1A7A43":"1px solid #E3D9CC"}}>
-          <div style={{width:22,height:22,borderRadius:5,border:"2px solid "+trk.color,
-            background:done?trk.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",
-            color:"#fff",fontSize:13,fontWeight:700}}>{done?"\u2713":""}</div>
-          <span style={{fontSize:14,fontWeight:600}}>{done?"Completed today":"Mark as done today"}</span>
-        </div>
-      )}
+      <div style={{fontSize:12,color:"#7A6C5E",marginBottom:12}}>{activeLabel}</div>
+      {todayControl}
       <div style={{display:"flex",gap:12}}>
         <div style={{flex:1,background:"#EBE4D8",borderRadius:10,padding:"10px 12px"}}>
           <div style={{fontSize:20,fontWeight:700,fontFamily:'"Playfair Display",serif',color:trk.color}}>{streak}</div>
@@ -38,7 +116,7 @@ function TrackerNavPanel({trackerId,trackers,byId,toggleTrackerDay}) {
   );
 }
 
-function NavOverlay({stack,tasks,notes,trackers,byId,updateTask,completeTask,toggleTrackerDay,onClose,onNavigateToLevel}) {
+function NavOverlay({stack,tasks,notes,trackers,byId,updateTask,completeTask,toggleTrackerDay,setTrackerDay,onClose,onNavigateToLevel}) {
   const allNotes=Object.values(notes||{}).flat();
   const {navigateTo,navigateToDate}=React.useContext(NavCtx)||{};
   const current=stack[stack.length-1];
@@ -80,7 +158,7 @@ function NavOverlay({stack,tasks,notes,trackers,byId,updateTask,completeTask,tog
         <div style={{flex:1,overflowY:"auto"}}>
           {current?.type==="task"&&<TaskPanel taskId={current.id} tasks={tasks} allNotes={allNotes} byId={byId} updateTask={updateTask} completeTask={completeTask}/>}
           {current?.type==="note"&&<NotePanel noteId={current.id} allNotes={allNotes} tasks={tasks} byId={byId}/>}
-          {current?.type==="tracker"&&<TrackerNavPanel trackerId={current.id} trackers={trackers} byId={byId} toggleTrackerDay={toggleTrackerDay}/>}
+          {current?.type==="tracker"&&<TrackerNavPanel trackerId={current.id} trackers={trackers} byId={byId} toggleTrackerDay={toggleTrackerDay} setTrackerDay={setTrackerDay}/>}
         </div>
       </div>
     </div>
@@ -395,7 +473,7 @@ function NotePanel({noteId,allNotes,tasks,byId}) {
   );
 }
 
-function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClose,navigateTo,navigateToDate,navigateToFresh}) {
+function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,setTrackerDay,onClose,navigateTo,navigateToDate,navigateToFresh}) {
   const [pos,  setPos]  = useState({x:null,y:null}); // null = anchored bottom-right
   const [dragging,setDragging]=useState(false);
   const dragRef=React.useRef(null);
@@ -427,7 +505,7 @@ function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClo
   const todaySids=[...new Set(blocks.filter(b=>b.sectionId&&byId[b.sectionId]).map(b=>b.sectionId))];
   const activeTasks=tasks.filter(t=>t.status!=="done"&&t.type!=="spacer"&&todaySids.includes(t.sectionId));
   const pinTodayDi=dayIndex(todayISO());
-  const pinTrackers=(trackers||[]).filter(t=>!t.archived&&t.activeDays[pinTodayDi]);
+  const pinTrackers=(trackers||[]).filter(t=>!t.archived&&(t.mode==="tally"||t.mode==="measure"||t.activeDays[pinTodayDi]));
   const pinToday=todayISO();
 
   const now=new Date();
@@ -538,13 +616,45 @@ function PinOverlay({tasks,tt,week,sections,byId,trackers,toggleTrackerDay,onClo
           <div style={{padding:"8px 12px 10px"}}>
             <div style={{fontSize:9,fontWeight:700,color:"#4A3F30",letterSpacing:"0.6px",textTransform:"uppercase",marginBottom:5}}>Trackers</div>
             <div style={{display:"flex",flexDirection:"column",gap:3}}>
-              {pinTrackers.map(trk=>{
-                const done=trk.completions[pinToday];
+              {pinTrackers.map(function(trk){
+                var pVal=trk.completions[pinToday];
+                var pDone=trk.mode==="tally"?(typeof pVal==="number"?pVal:pVal?1:0)>0
+                  :trk.mode==="rating"||trk.mode==="measure"?typeof pVal==="number"
+                  :trk.mode==="choice"?typeof pVal==="string"
+                  :!!pVal;
+
+                // Value display for right side
+                var pDisplay="";
+                if(trk.mode==="tally"){ var pc=typeof pVal==="number"?pVal:pVal?1:0; pDisplay=pc>0?String(pc):""; }
+                else if(trk.mode==="rating"&&typeof pVal==="number") pDisplay=pVal+"/"+(trk.config?.max||5);
+                else if(trk.mode==="measure"&&typeof pVal==="number") pDisplay=pVal+" "+(trk.config?.unit||"");
+                else if(trk.mode==="choice"&&typeof pVal==="string") pDisplay=pVal;
+
+                function pinClick(){
+                  if(trk.mode==="habit") toggleTrackerDay?.(trk.id,pinToday);
+                  else if(trk.mode==="tally") toggleTrackerDay?.(trk.id,pinToday,true);
+                  else if(trk.mode==="rating"){
+                    var rc=trk.config||{min:1,max:5};
+                    var nxt=typeof pVal==="number"?(pVal>=rc.max?null:pVal+1):rc.min;
+                    setTrackerDay?.(trk.id,pinToday,nxt);
+                  } else if(trk.mode==="choice"){
+                    var co=(trk.config?.options)||[];
+                    if(co.length===0) return;
+                    var ci=co.findIndex(function(o){return o.value===pVal;});
+                    var nv=ci<0?co[0].value:ci>=co.length-1?null:co[ci+1].value;
+                    setTrackerDay?.(trk.id,pinToday,nv);
+                  }
+                }
+
                 return (
-                  <div key={trk.id} onClick={()=>toggleTrackerDay?.(trk.id,pinToday)}
+                  <div key={trk.id} onClick={trk.mode!=="measure"?pinClick:undefined}
                     style={{display:"flex",alignItems:"center",gap:6,padding:"4px 7px",borderRadius:4,
-                      background:done?"#1A3A2A":"#2C2420",borderLeft:"2px solid "+trk.color,cursor:"pointer"}}>
-                    <span style={{fontSize:11,flex:1,color:done?"#9AD4B5":"#EBE4D8"}}>{done?"\u2713 ":""}{trk.title}</span>
+                      background:pDone?"#1A3A2A":"#2C2420",borderLeft:"2px solid "+trk.color,
+                      cursor:trk.mode!=="measure"?"pointer":"default"}}>
+                    <span style={{fontSize:11,flex:1,color:pDone?"#9AD4B5":"#EBE4D8"}}>
+                      {trk.mode==="habit"&&pDone?"\u2713 ":""}{trk.title}
+                    </span>
+                    {pDisplay&&<span style={{fontSize:10,fontWeight:700,color:trk.color,flexShrink:0}}>{pDisplay}</span>}
                   </div>
                 );
               })}

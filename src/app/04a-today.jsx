@@ -1,12 +1,12 @@
 // ─── Today View ───────────────────────────────────────────────────────────────
 
-function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onOpenCapture,trackers,toggleTrackerDay}) {
+function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onOpenCapture,trackers,toggleTrackerDay,setTrackerDay}) {
   const dayName  = todayName();
   const blocks   = getDayBlocks(dayName);
   const dateStr  = new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   const todaySids= [...new Set(blocks.filter(b=>b.sectionId&&b.sectionId!=="overhead"&&byId[b.sectionId]).map(b=>b.sectionId))];
   const todayDi  = dayIndex(todayISO());
-  const todayTrackers=(trackers||[]).filter(t=>!t.archived&&(t.mode==="tally"||t.activeDays[todayDi]));
+  const todayTrackers=(trackers||[]).filter(t=>!t.archived&&(t.mode==="tally"||t.mode==="measure"||t.activeDays[todayDi]));
   const today=todayISO();
 
   const DEFAULT_ORDER=["upcoming","trackers","schedule"];
@@ -53,24 +53,98 @@ function TodayView({getDayBlocks,sections,byId,tasks,updateTask,completeTask,onO
       <div style={{marginBottom:20,background:"#EBE4D8",borderRadius:14,padding:"16px 18px"}}>
         <Cap>Daily Trackers</Cap>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {todayTrackers.map(trk=>{
-              const val=trk.completions[today];
-              const done=trk.mode==="tally"?(typeof val==="number"?val:val?1:0)>0:!!val;
-              const count=trk.mode==="tally"?(typeof val==="number"?val:val?1:0):0;
-              const streak=trackerStreak(trk);
-              return trk.mode==="tally" ? (
+            {todayTrackers.map(function(trk){
+              var val=trk.completions[today];
+              var done=trk.mode==="tally"?(typeof val==="number"?val:val?1:0)>0
+                :trk.mode==="rating"||trk.mode==="measure"?typeof val==="number"
+                :trk.mode==="choice"?typeof val==="string"
+                :!!val;
+              var count=trk.mode==="tally"?(typeof val==="number"?val:val?1:0):0;
+              var streak=trackerStreak(trk);
+
+              // Tally card
+              if(trk.mode==="tally") return (
                 <div key={trk.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,
                   background:done?trk.color+"12":"#F8F3EC",border:"1px solid "+(done?trk.color+"40":"#E3D9CC")}}>
                   <Dot color={trk.color} size={10}/>
                   <span style={{fontSize:13,fontWeight:500,flex:1,color:"#1C1714"}}>{trk.title}</span>
                   <div style={{display:"flex",alignItems:"center",gap:4}}>
-                    <button onClick={()=>toggleTrackerDay(trk.id,today,false)} style={{width:22,height:22,borderRadius:5,border:"1.5px solid #D6CEC3",background:"#F8F3EC",fontSize:13,fontWeight:700,color:"#7A6C5E",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>&minus;</button>
+                    <button onClick={function(){toggleTrackerDay(trk.id,today,false);}} style={{width:22,height:22,borderRadius:5,border:"1.5px solid #D6CEC3",background:"#F8F3EC",fontSize:13,fontWeight:700,color:"#7A6C5E",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>&minus;</button>
                     <span style={{fontSize:14,fontWeight:700,color:trk.color,minWidth:24,textAlign:"center"}}>{count}</span>
-                    <button onClick={()=>toggleTrackerDay(trk.id,today,true)} style={{width:22,height:22,borderRadius:5,border:"1.5px solid "+trk.color,background:trk.color,fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                    <button onClick={function(){toggleTrackerDay(trk.id,today,true);}} style={{width:22,height:22,borderRadius:5,border:"1.5px solid "+trk.color,background:trk.color,fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
                   </div>
                 </div>
-              ) : (
-                <div key={trk.id} onClick={()=>toggleTrackerDay(trk.id,today)}
+              );
+
+              // Rating card
+              if(trk.mode==="rating"){
+                var cfg=trk.config||{min:1,max:5};
+                var dots=[];
+                for(var ri=cfg.min;ri<=cfg.max;ri++) dots.push(ri);
+                return (
+                  <div key={trk.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,
+                    background:done?trk.color+"12":"#F8F3EC",border:"1px solid "+(done?trk.color+"40":"#E3D9CC")}}>
+                    <Dot color={trk.color} size={10}/>
+                    <span style={{fontSize:13,fontWeight:500,flex:1,color:"#1C1714"}}>{trk.title}</span>
+                    <div style={{display:"flex",alignItems:"center",gap:3}}>
+                      {dots.map(function(v){ return (
+                        <div key={v} onClick={function(){setTrackerDay(trk.id,today,v);}}
+                          style={{width:24,height:24,borderRadius:"50%",fontSize:11,fontWeight:700,
+                            display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",
+                            background:val===v?trk.color:"transparent",
+                            color:val===v?"#fff":typeof val==="number"&&v<=val?trk.color:"#C2B49E",
+                            border:"1.5px solid "+(val===v?trk.color:typeof val==="number"&&v<=val?trk.color+"60":"#D6CEC3")}}>
+                          {v}
+                        </div>
+                      ); })}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Measure card
+              if(trk.mode==="measure") return (
+                <div key={trk.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,
+                  background:done?trk.color+"12":"#F8F3EC",border:"1px solid "+(done?trk.color+"40":"#E3D9CC")}}>
+                  <Dot color={trk.color} size={10}/>
+                  <span style={{fontSize:13,fontWeight:500,flex:1,color:"#1C1714"}}>{trk.title}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    <input key={String(val)} defaultValue={typeof val==="number"?val:""}
+                      onBlur={function(e){var v=parseFloat(e.target.value);if(!isNaN(v))setTrackerDay(trk.id,today,v);else if(!e.target.value.trim())setTrackerDay(trk.id,today,null);}}
+                      onKeyDown={function(e){if(e.key==="Enter")e.target.blur();}}
+                      placeholder={"\u2014"}
+                      style={{width:56,padding:"3px 6px",borderRadius:5,border:"1.5px solid "+(done?trk.color+"60":"#D6CEC3"),fontSize:13,textAlign:"center",background:"#fff",color:"#1C1714",fontWeight:600}}/>
+                    <span style={{fontSize:11,color:"#9B8E80",fontWeight:600}}>{trk.config?.unit||""}</span>
+                  </div>
+                </div>
+              );
+
+              // Choice card
+              if(trk.mode==="choice"){
+                var opts=(trk.config?.options)||[];
+                return (
+                  <div key={trk.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,
+                    background:done?trk.color+"12":"#F8F3EC",border:"1px solid "+(done?trk.color+"40":"#E3D9CC")}}>
+                    <Dot color={trk.color} size={10}/>
+                    <span style={{fontSize:13,fontWeight:500,flex:1,color:"#1C1714"}}>{trk.title}</span>
+                    <div style={{display:"flex",alignItems:"center",gap:3,flexWrap:"wrap"}}>
+                      {opts.map(function(o){ return (
+                        <div key={o.value} onClick={function(){setTrackerDay(trk.id,today,o.value);}}
+                          style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:12,cursor:"pointer",
+                            background:val===o.value?(o.color||trk.color):(o.color||trk.color)+"15",
+                            color:val===o.value?"#fff":(o.color||trk.color),
+                            border:"1.5px solid "+(val===o.value?(o.color||trk.color):(o.color||trk.color)+"40")}}>
+                          {o.value}
+                        </div>
+                      ); })}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Habit card (default)
+              return (
+                <div key={trk.id} onClick={function(){toggleTrackerDay(trk.id,today);}}
                   style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,cursor:"pointer",
                     background:done?"#D4F0E0":"#F8F3EC",border:done?"1.5px solid #1A7A43":"1px solid #E3D9CC"}}>
                   <div style={{width:20,height:20,borderRadius:5,border:"2px solid "+trk.color,

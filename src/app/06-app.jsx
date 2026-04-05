@@ -402,7 +402,8 @@ function App() {
     setTrackers(prev=>[{
       id:uid(),title,sectionId:opts.sectionId||null,color:opts.color||"#0C7B7B",
       mode:opts.mode||"habit",activeDays:opts.activeDays||[1,1,1,1,1,0,0],completions:{},
-      linkedTaskIds:[],linkedNoteIds:[],order:prev.length,archived:false,createdAt:Date.now()
+      linkedTaskIds:[],linkedNoteIds:[],order:prev.length,archived:false,createdAt:Date.now(),
+      config:opts.config||null
     },...prev]);
   }
   function updateTracker(id,upd){ setTrackers(p=>p.map(t=>t.id===id?{...t,...upd}:t)); }
@@ -420,6 +421,27 @@ function App() {
         if(increment) c[dateISO]=cur+1;
         else if(cur>1) c[dateISO]=cur-1;
         else delete c[dateISO];
+      } else {
+        if(c[dateISO]) delete c[dateISO]; else c[dateISO]=true;
+      }
+      return{...t,completions:c};
+    }));
+  }
+  function setTrackerDay(id,dateISO,value){
+    setTrackers(p=>p.map(t=>{
+      if(t.id!==id) return t;
+      var c={...t.completions};
+      if(value===null||value===undefined){ delete c[dateISO]; }
+      else if(t.mode==="rating"){
+        if(c[dateISO]===value) delete c[dateISO]; else c[dateISO]=value;
+      } else if(t.mode==="measure"){
+        if(value===null||value==="") delete c[dateISO]; else c[dateISO]=Number(value);
+      } else if(t.mode==="choice"){
+        if(c[dateISO]===value) delete c[dateISO]; else c[dateISO]=value;
+      } else if(t.mode==="tally"){
+        if(value==="increment"){ var cur=typeof c[dateISO]==="number"?c[dateISO]:c[dateISO]?1:0; c[dateISO]=cur+1; }
+        else if(value==="decrement"){ var cv=typeof c[dateISO]==="number"?c[dateISO]:c[dateISO]?1:0; if(cv>1) c[dateISO]=cv-1; else delete c[dateISO]; }
+        else c[dateISO]=value;
       } else {
         if(c[dateISO]) delete c[dateISO]; else c[dateISO]=true;
       }
@@ -765,11 +787,11 @@ function App() {
       </header>
 
       <main style={{padding:"24px 28px",maxWidth:1500,margin:"0 auto"}}>
-        {view==="today"     && <TodayView     {...tp} getDayBlocks={getDayBlocks} onOpenCapture={()=>setShowCap(true)} trackers={trackers} toggleTrackerDay={toggleTrackerDay}/>}
+        {view==="today"     && <TodayView     {...tp} getDayBlocks={getDayBlocks} onOpenCapture={()=>setShowCap(true)} trackers={trackers} toggleTrackerDay={toggleTrackerDay} setTrackerDay={setTrackerDay}/>}
         {view==="timetable" && <TimetableView sections={sections} byId={byId} getDayBlocks={getDayBlocks} upsertBlock={upsertBlock} deleteBlock={deleteBlock} templates={templates} addTemplate={addTemplate} updateTemplate={updateTemplate} deleteTemplate={deleteTemplate} applyTemplate={applyTemplate} tasks={tasks} notes={notes} setBlocks={setBlocks} addSetBlock={addSetBlock} removeSetBlock={removeSetBlock} reorderSetBlock={reorderSetBlock} trackers={trackers} week={week}/>}
         {view==="boards"    && <BoardsView    {...tp} notes={notes} setView={setView} initialSecId={lastBoardSec} onSecChange={setLastBoardSec} archiveTask={archiveTask} archiveDoneTasks={archiveDoneTasks}/>}
         {view==="notes"     && <NotesView     sections={sections} byId={byId} getSectionNotes={getSectionNotes} addNote={addNote} updateNoteField={updateNoteField} deleteNote={deleteNote} tasks={tasks} setView={setView} initialSecId={lastNoteKey.sec} initialNoteId={lastNoteKey.id} onNoteChange={(sec,id)=>setLastNoteKey({sec,id})}/>}
-        {view==="trackers"  && <TrackersView  trackers={trackers} addTracker={addTracker} updateTracker={updateTracker} deleteTracker={deleteTracker} toggleTrackerDay={toggleTrackerDay} archiveTracker={archiveTracker} sections={sections} byId={byId} tasks={tasks} notes={notes} addTask={addTask} addNote={addNote} linkTrackerToTask={linkTrackerToTask} unlinkTrackerFromTask={unlinkTrackerFromTask} linkTrackerToNote={linkTrackerToNote} unlinkTrackerFromNote={unlinkTrackerFromNote}/>}
+        {view==="trackers"  && <TrackersView  trackers={trackers} addTracker={addTracker} updateTracker={updateTracker} deleteTracker={deleteTracker} toggleTrackerDay={toggleTrackerDay} setTrackerDay={setTrackerDay} archiveTracker={archiveTracker} sections={sections} byId={byId} tasks={tasks} notes={notes} addTask={addTask} addNote={addNote} linkTrackerToTask={linkTrackerToTask} unlinkTrackerFromTask={unlinkTrackerFromTask} linkTrackerToNote={linkTrackerToNote} unlinkTrackerFromNote={unlinkTrackerFromNote}/>}
         {view==="monthly"   && <MonthlyView   tasks={tasks} sections={sections} byId={byId} initialMode="log"/>}
         {view==="calendar"   && <MonthlyView   tasks={tasks} sections={sections} byId={byId} initialMode="calendar"/>}
         {view==="stats"     && <StatsView     tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} notes={notes} trackers={trackers}/>}
@@ -822,9 +844,9 @@ function App() {
         ))}
       </div>
       {ctxMenu&&<ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={ctxMenu.items} onClose={()=>setCtxMenu(null)}/>}
-      {navStack.length>0&&<NavOverlay stack={navStack} tasks={tasks} notes={notes} trackers={trackers} byId={byId} updateTask={updateTask} completeTask={completeTask} toggleTrackerDay={toggleTrackerDay} onClose={()=>setNavStack([])} onNavigateToLevel={i=>setNavStack(s=>s.slice(0,i+1))}/>}
+      {navStack.length>0&&<NavOverlay stack={navStack} tasks={tasks} notes={notes} trackers={trackers} byId={byId} updateTask={updateTask} completeTask={completeTask} toggleTrackerDay={toggleTrackerDay} setTrackerDay={setTrackerDay} onClose={()=>setNavStack([])} onNavigateToLevel={i=>setNavStack(s=>s.slice(0,i+1))}/>}
     </div>
-      {showPin&&<PinOverlay tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} trackers={trackers} toggleTrackerDay={toggleTrackerDay} onClose={()=>setShowPin(false)} navigateTo={navigateTo} navigateToFresh={navigateToFresh} navigateToDate={navigateToDate}/>}
+      {showPin&&<PinOverlay tasks={tasks} tt={tt} week={week} sections={sections} byId={byId} trackers={trackers} toggleTrackerDay={toggleTrackerDay} setTrackerDay={setTrackerDay} onClose={()=>setShowPin(false)} navigateTo={navigateTo} navigateToFresh={navigateToFresh} navigateToDate={navigateToDate}/>}
       {pinnedNoteId&&<NoteFloatOverlay noteId={pinnedNoteId} notes={notes} onClose={()=>setPinnedNoteId(null)} onOpenNote={function(nid){var secKey=null;var entries=Object.entries(notes||{});for(var i=0;i<entries.length;i++){if(entries[i][1].some(function(n){return n.id===nid;})){secKey=entries[i][0];break;}}setLastNoteKey({sec:secKey||sections[0]?.id,id:nid});setView("notes");}}/>}
     </CtxMenuCtx.Provider>
     </NavCtx.Provider>
