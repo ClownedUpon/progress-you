@@ -1,3 +1,146 @@
+// ─── Tracker Charts (SVG) ─────────────────────────────────────────────────────
+
+function TrackerLineChart({trk}){
+  var _p=useState(30);var period=_p[0];var setPeriod=_p[1];
+
+  var end=new Date(todayISO()+"T12:00:00");
+  var dayCount=period>1000?Math.max(30,Object.keys(trk.completions).length+7):period;
+  var points=[];
+  for(var i=dayCount-1;i>=0;i--){
+    var d=new Date(end);d.setDate(d.getDate()-i);
+    var iso=d.toISOString().slice(0,10);
+    var v=trk.completions[iso];
+    if(typeof v==="number") points.push({date:iso,value:v,idx:dayCount-1-i});
+  }
+  if(points.length<2) return React.createElement("div",{style:{fontSize:11,color:"#9B8E80",fontStyle:"italic",padding:"12px 0"}},"Not enough data for chart (need at least 2 data points).");
+
+  var W=400,H=160,PL=35,PR=32,PT=10,PB=25;
+  var cW=W-PL-PR,cH=H-PT-PB;
+  var vals=points.map(function(p){return p.value;});
+  var minV=Math.min.apply(null,vals),maxV=Math.max.apply(null,vals);
+  if(minV===maxV){minV-=1;maxV+=1;}
+  var avg=vals.reduce(function(a,b){return a+b;},0)/vals.length;
+  var lastIdx=points[points.length-1].idx||1;
+  function sx(idx){return PL+(idx/lastIdx)*cW;}
+  function sy(val){return PT+(1-(val-minV)/(maxV-minV))*cH;}
+
+  var pathPts=points.map(function(p){return sx(p.idx)+","+sy(p.value);});
+  var polyStr=pathPts.join(" ");
+  var areaD="M"+pathPts[0]+" L"+pathPts.join(" L")+" L"+sx(points[points.length-1].idx)+","+(PT+cH)+" L"+sx(points[0].idx)+","+(PT+cH)+" Z";
+
+  var xLabels=points.filter(function(p,idx){return idx===0||idx===points.length-1||idx%Math.max(1,Math.floor(points.length/5))===0;});
+
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+        <span style={{fontSize:11,fontWeight:700,color:"#4A3F30"}}>Trends</span>
+        <div style={{display:"flex",gap:4}}>
+          {[{v:30,l:"30d"},{v:90,l:"90d"},{v:9999,l:"All"}].map(function(opt){return (
+            <button key={opt.v} onClick={function(){setPeriod(opt.v);}}
+              style={{fontSize:9,fontWeight:600,padding:"2px 8px",borderRadius:4,cursor:"pointer",
+                border:"1px solid "+(period===opt.v?"#4B3FC7":"#D6CEC3"),
+                background:period===opt.v?"#E6E3F5":"transparent",
+                color:period===opt.v?"#4B3FC7":"#9B8E80"}}>{opt.l}</button>
+          );})}
+        </div>
+      </div>
+      <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:"auto"}}>
+        <line x1={PL} y1={PT} x2={PL} y2={PT+cH} stroke="#D6CEC3" strokeWidth="0.5"/>
+        <line x1={PL} y1={PT+cH} x2={PL+cW} y2={PT+cH} stroke="#D6CEC3" strokeWidth="0.5"/>
+        <line x1={PL} y1={PT} x2={PL+cW} y2={PT} stroke="#EBE4D8" strokeWidth="0.3"/>
+        <line x1={PL} y1={PT+cH/2} x2={PL+cW} y2={PT+cH/2} stroke="#EBE4D8" strokeWidth="0.3"/>
+        <text x={PL-4} y={PT+4} fontSize="8" fill="#9B8E80" textAnchor="end">{maxV%1===0?maxV:maxV.toFixed(1)}</text>
+        <text x={PL-4} y={PT+cH+3} fontSize="8" fill="#9B8E80" textAnchor="end">{minV%1===0?minV:minV.toFixed(1)}</text>
+        <line x1={PL} y1={sy(avg)} x2={PL+cW} y2={sy(avg)} stroke={trk.color} strokeWidth="0.8" strokeDasharray="4,3" opacity="0.5"/>
+        <text x={PL+cW+2} y={sy(avg)+3} fontSize="7" fill={trk.color} opacity="0.7">{"avg "+avg.toFixed(1)}</text>
+        <path d={areaD} fill={trk.color} opacity="0.08"/>
+        <polyline points={polyStr} fill="none" stroke={trk.color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>
+        {points.map(function(p,idx){return React.createElement("circle",{key:idx,cx:sx(p.idx),cy:sy(p.value),r:2.5,fill:trk.color});})}
+        {xLabels.map(function(p,idx){return React.createElement("text",{key:idx,x:sx(p.idx),y:PT+cH+14,fontSize:7,fill:"#9B8E80",textAnchor:"middle"},p.date.slice(5));})}
+      </svg>
+    </div>
+  );
+}
+
+function TrackerHeatmap({trk}){
+  var WEEKS=12,CELL=14,GAP=2;
+  var today=new Date(todayISO()+"T12:00:00");
+  var endDow=(today.getDay()+6)%7;
+
+  var maxCount=1;
+  if(trk.mode==="tally"){
+    var ks=Object.keys(trk.completions);
+    for(var k=0;k<ks.length;k++){var cv=trk.completions[ks[k]];var cn=typeof cv==="number"?cv:cv?1:0;if(cn>maxCount)maxCount=cn;}
+  }
+
+  var startDate=new Date(today);
+  startDate.setDate(startDate.getDate()-(WEEKS*7-1)-endDow);
+  var cells=[],monthLabels=[],lastMonth=-1;
+  for(var w=0;w<WEEKS;w++){
+    for(var d=0;d<7;d++){
+      var dt=new Date(startDate);dt.setDate(dt.getDate()+w*7+d);
+      var iso=dt.toISOString().slice(0,10);
+      var val=trk.completions[iso];
+      var active=trk.mode==="tally"||trk.activeDays[d];
+      var done=trk.mode==="tally"?(typeof val==="number"?val:val?1:0)>0:!!val;
+      var count=typeof val==="number"?val:val?1:0;
+      var opacity=done?(trk.mode==="tally"?Math.max(0.25,count/maxCount):1):0;
+      if(d===0){var mo=dt.getMonth();if(mo!==lastMonth){monthLabels.push({week:w,label:dt.toLocaleDateString("en-GB",{month:"short"})});lastMonth=mo;}}
+      cells.push({w:w,d:d,iso:iso,done:done,opacity:opacity,active:active,count:count,future:dt>today});
+    }
+  }
+  var svgW=24+WEEKS*(CELL+GAP),svgH=16+7*(CELL+GAP);
+  var ROW_LBL=["Mo","","We","","Fr","","Su"];
+
+  return (
+    <div>
+      <div style={{fontSize:11,fontWeight:700,color:"#4A3F30",marginBottom:8}}>Activity</div>
+      <svg viewBox={"0 0 "+svgW+" "+svgH} style={{width:"100%",height:"auto"}}>
+        {monthLabels.map(function(m,i){return React.createElement("text",{key:i,x:24+m.week*(CELL+GAP),y:10,fontSize:8,fill:"#9B8E80"},m.label);})}
+        {ROW_LBL.map(function(l,i){return l?React.createElement("text",{key:i,x:18,y:16+i*(CELL+GAP)+CELL/2+3,fontSize:7,fill:"#9B8E80",textAnchor:"end"},l):null;})}
+        {cells.map(function(c,i){
+          return React.createElement("rect",{key:i,x:24+c.w*(CELL+GAP),y:16+c.d*(CELL+GAP),
+            width:CELL,height:CELL,rx:2,
+            fill:c.future?"#F5F0E8":c.done?trk.color:c.active?"#EBE4D8":"#F5F0E8",
+            opacity:c.done?c.opacity:c.future?0.4:1},
+            c.count>0?React.createElement("title",null,c.iso+": "+c.count):null);
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function TrackerBarChart({trk}){
+  var dist=trackerChoiceDist(trk);
+  var entries=Object.keys(dist).map(function(k){return{value:k,count:dist[k]};});
+  entries.sort(function(a,b){return b.count-a.count;});
+  if(entries.length===0) return React.createElement("div",{style:{fontSize:11,color:"#9B8E80",fontStyle:"italic",padding:"12px 0"}},"No data yet.");
+  var maxCount=entries[0].count;
+  var opts=(trk.config?.options)||[];
+
+  return (
+    <div>
+      <div style={{fontSize:11,fontWeight:700,color:"#4A3F30",marginBottom:8}}>Distribution</div>
+      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+        {entries.map(function(e){
+          var opt=opts.find(function(o){return o.value===e.value;});
+          var color=opt?.color||trk.color;
+          var pct=Math.round(e.count/maxCount*100);
+          return (
+            <div key={e.value} style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:11,fontWeight:500,width:70,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#4A3F30",flexShrink:0}}>{e.value}</span>
+              <div style={{flex:1,height:16,background:"#EBE4D8",borderRadius:4,overflow:"hidden"}}>
+                <div style={{width:pct+"%",height:"100%",background:color,borderRadius:4,minWidth:pct>0?2:0}}/>
+              </div>
+              <span style={{fontSize:10,fontWeight:700,color:color,minWidth:24,textAlign:"right",flexShrink:0}}>{e.count}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Trackers View ────────────────────────────────────────────────────────────
 
 function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTrackerDay,setTrackerDay,archiveTracker,sections,byId,tasks,notes,addTask,addNote,linkTrackerToTask,unlinkTrackerFromTask,linkTrackerToNote,unlinkTrackerFromNote}) {
@@ -316,7 +459,33 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
                 </span>
               )}
               <div style={{flex:1}}/>
-              <button onClick={()=>setEditId(sel.id)} style={{...S.btnGhost,fontSize:11,padding:"4px 12px"}}>Edit</button>
+              <button onClick={function(){
+                var trk=sel;
+                var dates=Object.keys(trk.completions).sort();
+                if(dates.length===0) return;
+                var unit=trk.config?.unit||"";
+                var header=trk.mode==="measure"?"Date,Value,Unit":"Date,Value";
+                var rows=[header];
+                for(var di=0;di<dates.length;di++){
+                  var d=dates[di];var v=trk.completions[d];
+                  var val=trk.mode==="habit"?(v?"Yes":"No"):String(v);
+                  rows.push(trk.mode==="measure"?d+","+val+","+unit:d+","+val);
+                }
+                var csv=rows.join("\n");
+                var fname=trk.title.replace(/[^a-zA-Z0-9_-]/g,"_")+"_export.csv";
+                if(window.__TAURI__?.dialog?.save){
+                  window.__TAURI__.dialog.save({defaultPath:fname,filters:[{name:"CSV",extensions:["csv"]}]}).then(function(path){
+                    if(!path) return;
+                    window.__TAURI__.fs.writeTextFile(path,csv);
+                  });
+                } else {
+                  var blob=new Blob([csv],{type:"text/csv"});
+                  var url=URL.createObjectURL(blob);
+                  var a=document.createElement("a");a.href=url;a.download=fname;a.click();
+                  URL.revokeObjectURL(url);
+                }
+              }} style={{...S.btnGhost,fontSize:11,padding:"4px 12px"}} title="Export tracker data as CSV">Export CSV</button>
+              <button onClick={function(){setEditId(sel.id);}} style={{...S.btnGhost,fontSize:11,padding:"4px 12px"}}>Edit</button>
               <button onClick={function(){archiveTracker(sel.id);setSelId(null);}} style={{...S.btnGhost,fontSize:11,padding:"4px 12px",color:"#9B8E80"}}>Archive</button>
               <button onClick={function(){setConfirmDelId(sel.id);}} style={{...S.btnGhost,fontSize:11,padding:"4px 12px",color:"#C43A3A"}}>Delete</button>
             </div>
@@ -494,6 +663,12 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
             <div style={{marginBottom:20,background:"#EBE4D8",borderRadius:12,padding:"14px 16px"}}>
               <MonthGrid trk={sel}/>
             </div>
+            {/* Charts */}
+            <div style={{marginBottom:20,background:"#EBE4D8",borderRadius:12,padding:"14px 16px"}}>
+              {(sel.mode==="rating"||sel.mode==="measure")&&<TrackerLineChart trk={sel}/>}
+              {(sel.mode==="habit"||sel.mode==="tally")&&<TrackerHeatmap trk={sel}/>}
+              {sel.mode==="choice"&&<TrackerBarChart trk={sel}/>}
+            </div>
           </div>
         ):(
           <div style={{textAlign:"center",padding:"80px 20px",color:"#9B8E80"}}>
@@ -567,6 +742,12 @@ function TrackerCreateModal({sections,tracker,onSave,onClose}) {
   // Choice config
   var [choiceOpts,setChoiceOpts]=useState(tc.options||[{value:"",color:""},{value:"",color:""}]);
 
+  // Mode change tracking
+  var [clearData,setClearData]=useState(false);
+  var originalMode=tracker?.mode||null;
+  var modeChanged=!!tracker&&mode!==originalMode;
+  var hasCompletions=tracker&&Object.keys(tracker.completions||{}).length>0;
+
   function toggleDay(i){ setDays(function(d){var n=[].concat(d);n[i]=n[i]?0:1;return n;}); }
 
   function handleSave(){
@@ -584,7 +765,9 @@ function TrackerCreateModal({sections,tracker,onSave,onClose}) {
       if(validOpts.length<2) return;
       config={options:validOpts};
     }
-    onSave({title:title.trim(),sectionId:secId||null,color:color,mode:mode,activeDays:days,config:config});
+    var saveData={title:title.trim(),sectionId:secId||null,color:color,mode:mode,activeDays:days,config:config};
+    if(modeChanged&&clearData) saveData.completions={};
+    onSave(saveData);
   }
 
   var MODES=[
@@ -625,6 +808,20 @@ function TrackerCreateModal({sections,tracker,onSave,onClose}) {
           {MODES.find(function(m){return m.key===mode;})?.desc||""}
         </div>
       </div>
+
+      {/* Mode change warning */}
+      {modeChanged&&hasCompletions&&(
+        <div style={{marginBottom:12,background:"#FAE8E8",borderRadius:9,padding:"10px 12px",border:"1px solid #E8C4C4"}}>
+          <div style={{fontSize:11,fontWeight:600,color:"#C43A3A",marginBottom:4}}>Mode changed</div>
+          <div style={{fontSize:10,color:"#8B4A4A",lineHeight:1.4,marginBottom:6}}>
+            Existing data ({Object.keys(tracker.completions).length} entries) may not be compatible with the new mode.
+          </div>
+          <label style={{display:"flex",alignItems:"center",gap:6,fontSize:10,color:"#8B4A4A",cursor:"pointer"}}>
+            <input type="checkbox" checked={clearData} onChange={function(e){setClearData(e.target.checked);}}/>
+            Clear existing completion data
+          </label>
+        </div>
+      )}
 
       {/* Rating config */}
       {mode==="rating"&&<div style={{marginBottom:12,background:"#F3EDE3",borderRadius:9,padding:"10px 12px"}}>

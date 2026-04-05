@@ -178,38 +178,134 @@ function StatsView({tasks,tt,week,sections,byId,notes,trackers}) {
       })()}
 
       {/* Tracker Consistency */}
-      {(()=>{
-        const activeTrackers=(trackers||[]).filter(t=>!t.archived);
+      {(function(){
+        var activeTrackers=(trackers||[]).filter(function(t){return !t.archived;});
         if(activeTrackers.length===0) return null;
-        const thisWeekDates=DAYS.map(function(_,i){ return addDays(week,i); });
-        const trkStats=activeTrackers.map(function(trk){
-          const expected=thisWeekDates.filter(function(_,i){ return trk.activeDays[i]; }).length;
-          const completed=thisWeekDates.filter(function(d,i){ return trk.activeDays[i]&&trk.completions[d]; }).length;
-          const rate=expected>0?Math.round(completed/expected*100):0;
-          const streak=trackerStreak(trk);
-          return{trk:trk,expected:expected,completed:completed,rate:rate,streak:streak};
-        });
+        var thisWeekDates=DAYS.map(function(_,i){ return addDays(week,i); });
+        var priorWeekDates=DAYS.map(function(_,i){ return addDays(week,i-7); });
+
+        function weekValues(trk,dates){
+          var vals=[];
+          for(var i=0;i<dates.length;i++){
+            var v=trk.completions[dates[i]];
+            if(typeof v==="number") vals.push(v);
+          }
+          return vals;
+        }
+
         return (
           <div style={{marginTop:20,background:"#EBE4D8",borderRadius:14,padding:"20px 22px"}}>
             <div style={{fontWeight:700,fontSize:13,color:"#4A3F30",marginBottom:16}}>&#x1F4CA; Tracker Consistency</div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {trkStats.map(function(s){
-                return (
-                  <div key={s.trk.id} style={{background:"#FDFAF6",borderRadius:10,padding:"12px 14px",border:"1px solid #E3D9CC"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                      <span style={{width:10,height:10,borderRadius:3,background:s.trk.color}}/>
-                      <span style={{fontSize:13,fontWeight:600,flex:1}}>{s.trk.title}</span>
-                      <span style={{fontSize:11,fontWeight:700,color:s.rate>=80?"#1A7A43":s.rate>=50?"#B05A12":"#C43A3A"}}>{s.rate}%</span>
+              {activeTrackers.map(function(trk){
+                var streak=trackerStreak(trk);
+
+                // Habit / Tally — rate-based
+                if(trk.mode==="habit"||trk.mode==="tally"){
+                  var expected=trk.mode==="tally"?7:thisWeekDates.filter(function(_,i){return trk.activeDays[i];}).length;
+                  var completed=thisWeekDates.filter(function(d,i){
+                    if(trk.mode==="tally"){var v=trk.completions[d];return(typeof v==="number"?v:v?1:0)>0;}
+                    return trk.activeDays[i]&&trk.completions[d];
+                  }).length;
+                  var rate=expected>0?Math.round(completed/expected*100):0;
+                  var monthCount=0;
+                  for(var mi=0;mi<30;mi++){
+                    var md=new Date(todayISO()+"T12:00:00");md.setDate(md.getDate()-mi);
+                    var miso=md.toISOString().slice(0,10);
+                    if(trk.completions[miso]) monthCount++;
+                  }
+                  return (
+                    <div key={trk.id} style={{background:"#FDFAF6",borderRadius:10,padding:"12px 14px",border:"1px solid #E3D9CC"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                        <span style={{width:10,height:10,borderRadius:3,background:trk.color}}/>
+                        <span style={{fontSize:13,fontWeight:600,flex:1}}>{trk.title}</span>
+                        <span style={{fontSize:11,fontWeight:700,color:rate>=80?"#1A7A43":rate>=50?"#B05A12":"#C43A3A"}}>{rate}%</span>
+                      </div>
+                      <div style={{height:6,borderRadius:3,background:"#E3D9CC",overflow:"hidden"}}>
+                        <div style={{height:"100%",borderRadius:3,background:trk.color,width:rate+"%",transition:"width 0.3s"}}/>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+                        <span style={{fontSize:10,color:"#9B8E80"}}>{completed}/{expected} this week · {monthCount}d this month</span>
+                        {streak>0&&<span style={{fontSize:10,fontWeight:600,color:trk.color}}>{streak}d streak</span>}
+                      </div>
                     </div>
-                    <div style={{height:6,borderRadius:3,background:"#E3D9CC",overflow:"hidden"}}>
-                      <div style={{height:"100%",borderRadius:3,background:s.trk.color,width:s.rate+"%",transition:"width 0.3s"}}/>
+                  );
+                }
+
+                // Rating — weekly average + trend
+                if(trk.mode==="rating"){
+                  var rMax=trk.config?.max||5;
+                  var thisVals=weekValues(trk,thisWeekDates);
+                  var priorVals=weekValues(trk,priorWeekDates);
+                  var thisAvg=thisVals.length>0?thisVals.reduce(function(a,b){return a+b;},0)/thisVals.length:null;
+                  var priorAvg=priorVals.length>0?priorVals.reduce(function(a,b){return a+b;},0)/priorVals.length:null;
+                  var trend=thisAvg!==null&&priorAvg!==null?(thisAvg>priorAvg?"\u2191":thisAvg<priorAvg?"\u2193":"\u2192"):null;
+                  var trendColor=trend==="\u2191"?"#1A7A43":trend==="\u2193"?"#C43A3A":"#9B8E80";
+                  return (
+                    <div key={trk.id} style={{background:"#FDFAF6",borderRadius:10,padding:"12px 14px",border:"1px solid #E3D9CC"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                        <span style={{width:10,height:10,borderRadius:3,background:trk.color}}/>
+                        <span style={{fontSize:13,fontWeight:600,flex:1}}>{trk.title}</span>
+                        {thisAvg!==null&&<span style={{fontSize:14,fontWeight:700,color:trk.color}}>{thisAvg.toFixed(1)}/{rMax}</span>}
+                        {trend&&<span style={{fontSize:13,fontWeight:700,color:trendColor}}>{trend}</span>}
+                      </div>
+                      <div style={{fontSize:10,color:"#9B8E80"}}>{thisVals.length} rating{thisVals.length!==1?"s":""} this week{streak>0?" · "+streak+"d streak":""}</div>
                     </div>
-                    <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-                      <span style={{fontSize:10,color:"#9B8E80"}}>{s.completed}/{s.expected} this week</span>
-                      {s.streak>0&&<span style={{fontSize:10,fontWeight:600,color:s.trk.color}}>{s.streak}d streak</span>}
+                  );
+                }
+
+                // Measure — weekly average + unit + min/max + trend
+                if(trk.mode==="measure"){
+                  var unit=trk.config?.unit||"";
+                  var mThisVals=weekValues(trk,thisWeekDates);
+                  var mPriorVals=weekValues(trk,priorWeekDates);
+                  var mThisAvg=mThisVals.length>0?mThisVals.reduce(function(a,b){return a+b;},0)/mThisVals.length:null;
+                  var mPriorAvg=mPriorVals.length>0?mPriorVals.reduce(function(a,b){return a+b;},0)/mPriorVals.length:null;
+                  var mTrend=mThisAvg!==null&&mPriorAvg!==null?(mThisAvg>mPriorAvg?"\u2191":mThisAvg<mPriorAvg?"\u2193":"\u2192"):null;
+                  var mTrendColor=mTrend==="\u2191"?"#1A7A43":mTrend==="\u2193"?"#C43A3A":"#9B8E80";
+                  var mMin=mThisVals.length>0?Math.min.apply(null,mThisVals):null;
+                  var mMax=mThisVals.length>0?Math.max.apply(null,mThisVals):null;
+                  return (
+                    <div key={trk.id} style={{background:"#FDFAF6",borderRadius:10,padding:"12px 14px",border:"1px solid #E3D9CC"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                        <span style={{width:10,height:10,borderRadius:3,background:trk.color}}/>
+                        <span style={{fontSize:13,fontWeight:600,flex:1}}>{trk.title}</span>
+                        {mThisAvg!==null&&<span style={{fontSize:14,fontWeight:700,color:trk.color}}>{mThisAvg.toFixed(1)} {unit}</span>}
+                        {mTrend&&<span style={{fontSize:13,fontWeight:700,color:mTrendColor}}>{mTrend}</span>}
+                      </div>
+                      <div style={{fontSize:10,color:"#9B8E80"}}>
+                        {mThisVals.length} entr{mThisVals.length!==1?"ies":"y"} this week
+                        {mMin!==null&&mMax!==null&&mMin!==mMax?" · range "+mMin+"\u2013"+mMax+" "+unit:""}
+                      </div>
                     </div>
-                  </div>
-                );
+                  );
+                }
+
+                // Choice — most frequent this week
+                if(trk.mode==="choice"){
+                  var cDist={};
+                  for(var ci=0;ci<thisWeekDates.length;ci++){
+                    var cv=trk.completions[thisWeekDates[ci]];
+                    if(typeof cv==="string") cDist[cv]=(cDist[cv]||0)+1;
+                  }
+                  var cEntries=Object.keys(cDist).map(function(k){return{value:k,count:cDist[k]};});
+                  cEntries.sort(function(a,b){return b.count-a.count;});
+                  var topChoice=cEntries[0]||null;
+                  var cOpts=(trk.config?.options)||[];
+                  var topOpt=topChoice?cOpts.find(function(o){return o.value===topChoice.value;}):null;
+                  var topColor=topOpt?.color||trk.color;
+                  return (
+                    <div key={trk.id} style={{background:"#FDFAF6",borderRadius:10,padding:"12px 14px",border:"1px solid #E3D9CC"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                        <span style={{width:10,height:10,borderRadius:3,background:trk.color}}/>
+                        <span style={{fontSize:13,fontWeight:600,flex:1}}>{trk.title}</span>
+                        {topChoice&&<span style={{fontSize:11,fontWeight:600,padding:"2px 10px",borderRadius:10,background:topColor,color:"#fff"}}>{topChoice.value} ({topChoice.count})</span>}
+                      </div>
+                      <div style={{fontSize:10,color:"#9B8E80"}}>{cEntries.reduce(function(s,e){return s+e.count;},0)} choice{cEntries.reduce(function(s,e){return s+e.count;},0)!==1?"s":""} this week{streak>0?" · "+streak+"d streak":""}</div>
+                    </div>
+                  );
+                }
+                return null;
               })}
             </div>
           </div>
