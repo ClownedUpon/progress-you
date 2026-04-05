@@ -113,7 +113,7 @@ const TEXT_COLORS = [
 
 // Bump this number whenever the data schema changes (new fields, renamed keys, etc.)
 // so exported files can be versioned and future imports can handle old formats.
-const EXPORT_VERSION = 8;
+const EXPORT_VERSION = 9;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -187,6 +187,51 @@ function trackerStreak(trk) {
   }
   return streak;
 }
+function trackerAvg(trk, days) {
+  var end = todayISO();
+  var vals = [];
+  var d = new Date(end + "T12:00:00");
+  for (var i = 0; i < days; i++) {
+    var iso = d.toISOString().slice(0, 10);
+    var v = trk.completions[iso];
+    if (typeof v === "number") vals.push(v);
+    d.setDate(d.getDate() - 1);
+  }
+  if (vals.length === 0) return null;
+  return vals.reduce(function(a, b) { return a + b; }, 0) / vals.length;
+}
+
+function trackerMinMax(trk) {
+  var vals = [];
+  var keys = Object.keys(trk.completions);
+  for (var i = 0; i < keys.length; i++) {
+    var v = trk.completions[keys[i]];
+    if (typeof v === "number") vals.push(v);
+  }
+  if (vals.length === 0) return null;
+  return { min: Math.min.apply(null, vals), max: Math.max.apply(null, vals) };
+}
+
+function trackerChoiceDist(trk, days) {
+  var dist = {};
+  if (days) {
+    var d = new Date(todayISO() + "T12:00:00");
+    for (var i = 0; i < days; i++) {
+      var iso = d.toISOString().slice(0, 10);
+      var v = trk.completions[iso];
+      if (typeof v === "string") dist[v] = (dist[v] || 0) + 1;
+      d.setDate(d.getDate() - 1);
+    }
+  } else {
+    var keys = Object.keys(trk.completions);
+    for (var j = 0; j < keys.length; j++) {
+      var val = trk.completions[keys[j]];
+      if (typeof val === "string") dist[val] = (dist[val] || 0) + 1;
+    }
+  }
+  return dist;
+}
+
 function fmtDue(iso, dueTime=null, allDay=true) {
   const today=todayISO(), diff=Math.round((new Date(iso+"T12:00:00")-new Date(today+"T12:00:00"))/(1000*60*60*24));
   const d=new Date(iso+"T12:00:00");
@@ -864,6 +909,7 @@ function migrateTrackers(trackers) {
     linkedTaskIds: t.linkedTaskIds ?? [],
     linkedNoteIds: t.linkedNoteIds ?? [],
     archived:      t.archived      ?? false,
+    config:        t.config        ?? null,
   }));
 }
 
