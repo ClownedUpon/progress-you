@@ -11,7 +11,7 @@ Pure function, no fuss or flash. Two core principles:
 ## Stack
 - **Tauri v2** (Rust backend) + **vanilla React 18** via local vendor bundle + **Babel 7.23.2** standalone — no build step
 - Frontend entry: `src/index.html` (81-line HTML shell + script loader)
-- App source: `src/app/` — 6 JSX files fetched, concatenated, and Babel-compiled at runtime
+- App source: `src/app/` — 13 JSX files fetched, concatenated, and Babel-compiled at runtime
 - Vendor libs: `src/vendor/` (react, react-dom, babel, fonts)
 - Data stored via `tauri-plugin-fs` in `AppData/Roaming/com.progressyou.desktop/`
 - Rust files: `src-tauri/src/main.rs`, `src-tauri/build.rs`, `src-tauri/Cargo.toml`
@@ -23,7 +23,14 @@ Pure function, no fuss or flash. Two core principles:
 | `01-core.jsx` | React destructuring, contexts, constants, helpers, storage, migrations, Tiptap extensions, `buildSeedData`, `buildShowcaseData` |
 | `02-shared.jsx` | Micro components (Dot, Badge, Cap, Pill, Empty, Overlay), ColorPicker, TimePicker, ContextMenu, AppDialog, `VIEW_HELP`, `HelpPanel` |
 | `03-modals.jsx` | QuickCapture, Search, Schedule, ImportExport, Block, Template, AddTask, TaskEdit, SectionDelete, UpdateDialog |
-| `04-views.jsx` | TodayView, TimetableView, BoardsView, NotesView, NoteEditor, TrackersView, MonthlyView, StatsView, TrackerCreateModal, SettingsModal |
+| `04a-today.jsx` | TodayView, UpcomingDigest, MiniCol, MiniColTask |
+| `04b-timetable.jsx` | TimetableView |
+| `04c-boards.jsx` | BoardsView, SpacerCard, TaskCard |
+| `04d-notes.jsx` | NotesView, NoteEditor |
+| `04e-monthly.jsx` | MonthlyView (Calendar + Log tabs) |
+| `04f-trackers.jsx` | TrackersView, TrackerCreateModal |
+| `04g-stats.jsx` | StatsView |
+| `04h-settings.jsx` | SettingsModal |
 | `05-overlays.jsx` | TrackerNavPanel, NavOverlay, NoteDeleteOverlay, TaskPanel, NotePanel, PinOverlay, NoteFloatOverlay, WelcomeOverlay, WalkthroughOverlay |
 | `06-app.jsx` | ErrorBoundary, App component, global styles, ReactDOM.createRoot render call |
 
@@ -99,12 +106,11 @@ The GitHub Actions workflow in `.github/workflows/release.yml` builds the MSI, s
 - Phase 2 Mobile (deferred): Tauri mobile target + LAN sync
 - Node.js deprecation: `actions/checkout@v4` and `actions/setup-node@v4` will drop Node 20 before June 2026 — update CI before then
 - Babel "Script error" in dev — does not affect production, cause not yet isolated
-- Consider splitting `04-views.jsx` (~2600 lines) if another major view feature lands
 
 ## How to Work on This Project
 1. Read the relevant `src/app/*.jsx` file before making changes — use the table above to find the right file
 2. Test all changes with `npm run tauri dev`
-3. New components go in the appropriate file by category (shared → 02, modal → 03, view → 04, overlay → 05)
+3. New components go in the appropriate file by category (shared → 02, modal → 03, view → 04a–04h, overlay → 05)
 4. Respect the Babel constraints above — they are the most common source of silent breakage
 5. When editing styles, follow the existing design system: warm earth tones (#F8F3EC background, #1C1714 dark, #EBE4D8 muted, Playfair Display for headings, DM Sans for body)
 6. All new data fields must be added to the relevant migration function (`migrateTasks`, `migrateNotes`, `migrateTt`, `migrateTrackers`) with `??` defaults so existing data isn't broken
