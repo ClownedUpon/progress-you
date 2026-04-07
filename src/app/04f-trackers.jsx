@@ -178,6 +178,7 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
   function MonthGrid({trk}){
     const now=new Date();
     const [monthOff,setMonthOff]=useState(0);
+    const [editCell,setEditCell]=useState(null);
     const ref=new Date(now.getFullYear(),now.getMonth()+monthOff,1);
     const year=ref.getFullYear(),month=ref.getMonth();
     const monthLabel=ref.toLocaleDateString("en-GB",{month:"long",year:"numeric"});
@@ -206,18 +207,7 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
     function handleCellClick(c){
       if(!c.active) return;
       if(trk.mode==="habit") toggleTrackerDay(trk.id,c.iso);
-      else if(trk.mode==="tally") toggleTrackerDay(trk.id,c.iso,true);
-      else if(trk.mode==="rating"){
-        var rc=trk.config||{min:1,max:5};
-        var nxt=typeof c.val==="number"?(c.val>=rc.max?null:c.val+1):rc.min;
-        setTrackerDay(trk.id,c.iso,nxt);
-      } else if(trk.mode==="choice"){
-        var co=(trk.config?.options)||[];
-        if(co.length===0) return;
-        var ci=co.findIndex(function(o){return o.value===c.val;});
-        var nv=ci<0?co[0].value:ci>=co.length-1?null:co[ci+1].value;
-        setTrackerDay(trk.id,c.iso,nv);
-      }
+      else setEditCell(c);
     }
 
     function cellBg(c){
@@ -246,10 +236,15 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
     }
 
     function cellContent(c){
-      if(trk.mode==="tally"&&c.count>0) return React.createElement("span",{style:{fontSize:8,fontWeight:700,lineHeight:1}},c.count);
-      if(trk.mode==="rating"&&typeof c.val==="number") return React.createElement("span",{style:{fontSize:8,fontWeight:700,lineHeight:1}},c.val);
-      if(trk.mode==="measure"&&typeof c.val==="number") return React.createElement("span",{style:{fontSize:7,fontWeight:700,lineHeight:1}},c.val);
-      if(trk.mode==="choice"&&typeof c.val==="string") return React.createElement("span",{style:{fontSize:10,lineHeight:1}},"\u25CF");
+      if(trk.mode==="tally"&&c.count>0) return String(c.count);
+      if(trk.mode==="rating"&&typeof c.val==="number") return String(c.val);
+      if(trk.mode==="measure"&&typeof c.val==="number") return String(c.val);
+      if(trk.mode==="choice"&&typeof c.val==="string"){
+        var cOpt=(trk.config?.options||[]).find(function(o){return o.value===c.val;});
+        var label=(cOpt?.value||c.val);
+        return label.slice(0,2).toUpperCase();
+      }
+      if(trk.mode==="habit"&&c.done) return "\u2713";
       return null;
     }
 
@@ -280,17 +275,73 @@ function TrackersView({trackers,addTracker,updateTracker,deleteTracker,toggleTra
                   :trk.mode!=="habit"&&c.done?function(e){e.preventDefault();setTrackerDay(trk.id,c.iso,null);}
                   :undefined}
                 title={cellTitle(c)}
-                style={{width:"100%",aspectRatio:"1",borderRadius:4,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-                  fontSize:c.done&&(trk.mode==="tally"||trk.mode==="rating"||trk.mode==="measure")?8:10,
-                  fontWeight:isToday?700:500,cursor:c.active?"pointer":"default",
-                  background:cellBg(c),color:cellColor(c),
+                style={{position:"relative",width:"100%",aspectRatio:"1",borderRadius:4,cursor:c.active?"pointer":"default",
+                  background:cellBg(c),
                   border:isToday?"2px solid "+trk.color:"1px solid transparent"}}>
-                <span>{c.day}</span>
-                {cellContent(c)}
+                <span style={{position:"absolute",top:1,left:3,fontSize:7,fontWeight:isToday?700:500,color:c.active?"#9B8E80":"#C8BEB0",lineHeight:1}}>{c.day}</span>
+                {cellContent(c)!==null&&(
+                  <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:trk.mode==="measure"?11:14,fontWeight:700,color:cellColor(c),lineHeight:1}}>
+                    {cellContent(c)}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
+        {editCell&&(
+          <Overlay onClose={function(){setEditCell(null);}} width={320}>
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:11,color:"#9B8E80",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.5px"}}>{trk.title}</div>
+              <h3 style={{fontFamily:'"Playfair Display",serif',fontSize:17,margin:"4px 0 0 0"}}>{new Date(editCell.iso+"T12:00:00").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})}</h3>
+            </div>
+            {trk.mode==="tally"&&(function(){
+              var cnt=editCell.count;
+              return <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:14,padding:"12px 0"}}>
+                <button onClick={function(){toggleTrackerDay(trk.id,editCell.iso,false);setEditCell({...editCell,count:Math.max(0,cnt-1),val:Math.max(0,cnt-1)||undefined});}}
+                  style={{width:36,height:36,borderRadius:8,border:"1.5px solid #D6CEC3",background:"#F8F3EC",fontSize:18,fontWeight:700,color:"#7A6C5E",cursor:"pointer"}}>&minus;</button>
+                <span style={{fontSize:28,fontWeight:700,color:trk.color,minWidth:48,textAlign:"center"}}>{cnt}</span>
+                <button onClick={function(){toggleTrackerDay(trk.id,editCell.iso,true);setEditCell({...editCell,count:cnt+1,val:cnt+1});}}
+                  style={{width:36,height:36,borderRadius:8,border:"1.5px solid "+trk.color,background:trk.color,fontSize:18,fontWeight:700,color:"#fff",cursor:"pointer"}}>+</button>
+              </div>;
+            })()}
+            {trk.mode==="rating"&&(function(){
+              var rc=trk.config||{min:1,max:5};
+              var dots=[];for(var rv=rc.min;rv<=rc.max;rv++) dots.push(rv);
+              return <div style={{display:"flex",flexWrap:"wrap",gap:6,justifyContent:"center",padding:"8px 0"}}>
+                {dots.map(function(v){return <button key={v} onClick={function(){setTrackerDay(trk.id,editCell.iso,v);setEditCell(null);}}
+                  style={{width:38,height:38,borderRadius:"50%",border:"1.5px solid "+(editCell.val===v?trk.color:"#D6CEC3"),
+                    background:editCell.val===v?trk.color:"transparent",color:editCell.val===v?"#fff":trk.color,
+                    fontSize:14,fontWeight:700,cursor:"pointer"}}>{v}</button>;})}
+              </div>;
+            })()}
+            {trk.mode==="measure"&&(function(){
+              var unit=trk.config?.unit||"";
+              return <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"12px 0"}}>
+                <input autoFocus type="number" defaultValue={typeof editCell.val==="number"?editCell.val:""}
+                  onKeyDown={function(e){if(e.key==="Enter"){var v=parseFloat(e.target.value);if(!isNaN(v))setTrackerDay(trk.id,editCell.iso,v);setEditCell(null);}}}
+                  onBlur={function(e){var v=parseFloat(e.target.value);if(!isNaN(v))setTrackerDay(trk.id,editCell.iso,v);else if(!e.target.value.trim())setTrackerDay(trk.id,editCell.iso,null);}}
+                  style={{width:120,padding:"8px 12px",borderRadius:8,border:"1.5px solid "+trk.color,fontSize:18,fontWeight:700,textAlign:"center",color:trk.color,background:"#FDFAF6"}}/>
+                <span style={{fontSize:14,fontWeight:600,color:"#7A6C5E"}}>{unit}</span>
+              </div>;
+            })()}
+            {trk.mode==="choice"&&(function(){
+              var co=(trk.config?.options)||[];
+              return <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center",padding:"8px 0"}}>
+                {co.map(function(o){return <button key={o.value} onClick={function(){setTrackerDay(trk.id,editCell.iso,o.value);setEditCell(null);}}
+                  style={{padding:"8px 16px",borderRadius:18,border:"1.5px solid "+(o.color||trk.color),
+                    background:editCell.val===o.value?(o.color||trk.color):(o.color||trk.color)+"15",
+                    color:editCell.val===o.value?"#fff":(o.color||trk.color),
+                    fontSize:13,fontWeight:600,cursor:"pointer"}}>{o.value}</button>;})}
+              </div>;
+            })()}
+            <div style={{display:"flex",gap:8,marginTop:14}}>
+              {editCell.done&&<button onClick={function(){setTrackerDay(trk.id,editCell.iso,null);setEditCell(null);}}
+                style={{...S.btnGhost,flex:1,color:"#C43A3A"}}>Clear</button>}
+              <button onClick={function(){setEditCell(null);}} style={{...S.btnGhost,flex:1}}>Done</button>
+            </div>
+          </Overlay>
+        )}
       </div>
     );
   }

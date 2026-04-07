@@ -368,11 +368,12 @@ var VIEW_HELP = {
   },
   trackers: {
     title: "Trackers",
-    summary: "Track daily habits and tally occurrences. See streaks, weekly grids, and a monthly calendar. Trackers can link to tasks and notes.",
+    summary: "Five tracker types: habits (yes/no), tallies (counts), ratings (scales), measures (numbers + units), and choices (from a list). Streaks, monthly calendar, trend charts, and CSV export.",
     actions: [
-      "Click a day cell to toggle completion (habits) or increment (tallies)",
-      "Right-click a tally cell to decrement",
-      "View archived trackers with the toggle at the top",
+      "Click a day cell to toggle, increment, cycle rating, or cycle choice",
+      "Right-click a cell to clear its value",
+      "Change tracker type when editing \u2014 existing data can be cleared with a checkbox",
+      "Export any tracker's history as CSV from the detail panel",
       "Link trackers to related tasks and notes from the detail panel",
     ],
     shortcuts: []
