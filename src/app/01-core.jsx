@@ -345,20 +345,30 @@ function buildSeedData() {
     ],
   };
 
-  // ── Trackers
+  // ── Trackers (one of each type to showcase the full system)
   var trackers = [
     { id:trHealth1, title:"Morning Run", sectionId:"health", color:"#1A7A43", mode:"habit",
-      activeDays:[1,1,1,1,1,0,0], completions:{}, linkedTaskIds:[tHealth1], linkedNoteIds:[],
+      activeDays:[1,1,1,1,1,0,0], completions:{}, config:null, linkedTaskIds:[tHealth1], linkedNoteIds:[],
       order:0, archived:false, createdAt:now },
     { id:trLearn1, title:"Read 30 Minutes", sectionId:"learning", color:"#4B3FC7", mode:"habit",
-      activeDays:[1,1,1,1,1,1,1], completions:{}, linkedTaskIds:[tLearn1], linkedNoteIds:[nLearn1],
+      activeDays:[1,1,1,1,1,1,1], completions:{}, config:null, linkedTaskIds:[tLearn1], linkedNoteIds:[nLearn1],
       order:1, archived:false, createdAt:now },
     { id:trHealth2, title:"Drink Water", sectionId:"health", color:"#0C7B7B", mode:"tally",
-      activeDays:[1,1,1,1,1,1,1], completions:{}, linkedTaskIds:[], linkedNoteIds:[],
+      activeDays:[1,1,1,1,1,1,1], completions:{}, config:null, linkedTaskIds:[], linkedNoteIds:[],
       order:2, archived:false, createdAt:now },
+    { id:uid(), title:"Mood", sectionId:"personal", color:"#B5730C", mode:"rating",
+      activeDays:[1,1,1,1,1,1,1], completions:{}, config:{min:1,max:5,labels:{1:"Low",3:"OK",5:"Great"}},
+      linkedTaskIds:[], linkedNoteIds:[], order:3, archived:false, createdAt:now },
+    { id:uid(), title:"Weight", sectionId:"health", color:"#7A4A9B", mode:"measure",
+      activeDays:[1,1,1,1,1,1,1], completions:{}, config:{unit:"kg",min:null,max:null},
+      linkedTaskIds:[], linkedNoteIds:[], order:4, archived:false, createdAt:now },
+    { id:uid(), title:"Weather", sectionId:null, color:"#2A7A8A", mode:"choice",
+      activeDays:[1,1,1,1,1,1,1], completions:{},
+      config:{options:[{value:"Sunny",color:"#E8A82C"},{value:"Cloudy",color:"#9B8E80"},{value:"Rainy",color:"#4B6F9B"},{value:"Snow",color:"#C8D6E0"}]},
+      linkedTaskIds:[], linkedNoteIds:[], order:5, archived:false, createdAt:now },
     { id:uid(), title:"Coffees", sectionId:null, color:"#8B5E3C", mode:"tally",
-      activeDays:[1,1,1,1,1,1,1], completions:{}, linkedTaskIds:[], linkedNoteIds:[],
-      order:3, archived:false, createdAt:now },
+      activeDays:[1,1,1,1,1,1,1], completions:{}, config:null, linkedTaskIds:[], linkedNoteIds:[],
+      order:6, archived:false, createdAt:now },
   ];
 
   // ── Timetable (blocks for today's day in current week)
@@ -551,14 +561,17 @@ function buildShowcaseData() {
     ],
   };
 
-  // ── Trackers with 28 days of historical completions
+  // ── Trackers with 28 days of historical completions (showcases all 5 types)
+  var weatherOpts=[{value:"Sunny",color:"#E8A82C"},{value:"Cloudy",color:"#9B8E80"},{value:"Rainy",color:"#4B6F9B"},{value:"Snow",color:"#C8D6E0"}];
   var trackerDefs = [
-    { id:trH1, title:"Morning Run",    sectionId:"health",   color:"#1A7A43", mode:"habit",  activeDays:[1,1,1,1,1,0,0], linkedTaskIds:[tH1], linkedNoteIds:[nH1], order:0 },
-    { id:trL1, title:"Read 30 Minutes",sectionId:"learning", color:"#4B3FC7", mode:"habit",  activeDays:[1,1,1,1,1,1,1], linkedTaskIds:[tL2], linkedNoteIds:[nL1], order:1 },
-    { id:trH2, title:"Drink Water",    sectionId:"health",   color:"#0C7B7B", mode:"tally",  activeDays:[1,1,1,1,1,1,1], linkedTaskIds:[],    linkedNoteIds:[],    order:2 },
-    { id:trP1, title:"Meditate",       sectionId:"personal", color:"#8B6A30", mode:"habit",  activeDays:[1,1,1,1,1,1,1], linkedTaskIds:[],    linkedNoteIds:[],    order:3 },
-    { id:trC1, title:"Coffees",        sectionId:null,       color:"#8B5E3C", mode:"tally",  activeDays:[1,1,1,1,1,1,1], linkedTaskIds:[],    linkedNoteIds:[],    order:4 },
-    { id:trL2, title:"Code Practice",  sectionId:"learning", color:"#C43A3A", mode:"habit",  activeDays:[1,1,1,1,1,0,0], linkedTaskIds:[],    linkedNoteIds:[],    order:5 },
+    { id:trH1, title:"Morning Run",    sectionId:"health",   color:"#1A7A43", mode:"habit",   activeDays:[1,1,1,1,1,0,0], config:null, linkedTaskIds:[tH1], linkedNoteIds:[nH1], order:0 },
+    { id:trL1, title:"Read 30 Minutes",sectionId:"learning", color:"#4B3FC7", mode:"habit",   activeDays:[1,1,1,1,1,1,1], config:null, linkedTaskIds:[tL2], linkedNoteIds:[nL1], order:1 },
+    { id:trH2, title:"Drink Water",    sectionId:"health",   color:"#0C7B7B", mode:"tally",   activeDays:[1,1,1,1,1,1,1], config:null, linkedTaskIds:[],    linkedNoteIds:[],    order:2 },
+    { id:uid(),title:"Mood",           sectionId:"personal", color:"#B5730C", mode:"rating",  activeDays:[1,1,1,1,1,1,1], config:{min:1,max:5,labels:{1:"Low",3:"OK",5:"Great"}}, linkedTaskIds:[], linkedNoteIds:[], order:3 },
+    { id:uid(),title:"Weight",         sectionId:"health",   color:"#7A4A9B", mode:"measure", activeDays:[1,1,1,1,1,1,1], config:{unit:"kg",min:null,max:null}, linkedTaskIds:[], linkedNoteIds:[], order:4 },
+    { id:uid(),title:"Weather",        sectionId:null,       color:"#2A7A8A", mode:"choice",  activeDays:[1,1,1,1,1,1,1], config:{options:weatherOpts}, linkedTaskIds:[], linkedNoteIds:[], order:5 },
+    { id:trC1, title:"Coffees",        sectionId:null,       color:"#8B5E3C", mode:"tally",   activeDays:[1,1,1,1,1,1,1], config:null, linkedTaskIds:[],    linkedNoteIds:[],    order:6 },
+    { id:trL2, title:"Code Practice",  sectionId:"learning", color:"#C43A3A", mode:"habit",   activeDays:[1,1,1,1,1,0,0], config:null, linkedTaskIds:[],    linkedNoteIds:[],    order:7 },
   ];
 
   var trackers = trackerDefs.map(function(def, tIdx) {
@@ -569,14 +582,21 @@ function buildShowcaseData() {
       if (!def.activeDays[di]) continue;
       if (def.mode === "habit") {
         if ((dayOff * 7 + tIdx) % 10 < 7) completions[dStr] = true;
-      } else if (def.title === "Drink Water") {
-        completions[dStr] = 2 + (dayOff % 4);
-      } else {
-        completions[dStr] = 1 + (dayOff % 3);
+      } else if (def.mode === "tally") {
+        if (def.title === "Drink Water") completions[dStr] = 4 + (dayOff % 5);
+        else completions[dStr] = 1 + (dayOff % 3);
+      } else if (def.mode === "rating") {
+        // Mood: drift 2–5 with some variance
+        completions[dStr] = 2 + ((dayOff * 3 + tIdx) % 4);
+      } else if (def.mode === "measure") {
+        // Weight: slow downward trend around 72kg
+        completions[dStr] = Math.round((72.5 - dayOff * 0.05 + Math.sin(dayOff) * 0.4) * 10) / 10;
+      } else if (def.mode === "choice") {
+        completions[dStr] = weatherOpts[(dayOff + tIdx) % weatherOpts.length].value;
       }
     }
     return { id:def.id, title:def.title, sectionId:def.sectionId, color:def.color, mode:def.mode,
-      activeDays:def.activeDays, completions:completions, linkedTaskIds:def.linkedTaskIds,
+      activeDays:def.activeDays, completions:completions, config:def.config, linkedTaskIds:def.linkedTaskIds,
       linkedNoteIds:def.linkedNoteIds, order:def.order, archived:false, createdAt:now };
   });
 
