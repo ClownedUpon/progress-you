@@ -91,7 +91,7 @@ These constraints are non-negotiable. Violating them will break the app at compi
 `index.html` uses a resilient async loader: tries `./vendor/*.min.js` first (offline), falls back to CDN (dev mode only), shows a visible error if both fail. After vendors load, it fetches all 6 `src/app/*.jsx` files via `fetch()`, concatenates them in order, and compiles via `Babel.transform()` with presets `['env', 'react']`.
 
 ## Current Version
-3.0.0
+3.0.2
 
 ## Release Process
 ```
